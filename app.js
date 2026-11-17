@@ -20,7 +20,6 @@ const CONFIG_DEFECTO = {
     { nombre: 'Nombre del Párroco', cargo: 'Párroco', firma: '' },
     { nombre: 'Nombre de la Secretaria', cargo: 'secretaria', firma: '' },
   ],
-  firmaActual: 0,
 };
 
 const Almacen = {
@@ -46,6 +45,7 @@ const estado = {
   vista: 'menu',
   certId: null,
   descargas: null,
+  firma: null,      // índice del firmante elegido; al abrir la aplicación no hay ninguno
 };
 // Migración desde la primera versión (un único registro)
 if (!Array.isArray(estado.registros)) {
@@ -93,7 +93,8 @@ function guardarRegistro() {
   Almacen.guardar('actual', estado.actualId);
   Google.cambiado('registros');
 }
-function firmante() { return estado.config.firmas[estado.config.firmaActual] || estado.config.firmas[0] || {}; }
+function firmante() { return estado.firma == null ? {} : (estado.config.firmas[estado.firma] || {}); }
+const sinFirma = () => estado.firma == null || !estado.config.firmas[estado.firma];
 
 // Lo que ve Google: datos para subir y cómo aplicar lo que baja
 Google.usarProveedor({
@@ -207,7 +208,7 @@ const ICONOS = {
   catequesis: `<svg viewBox="0 0 48 48"><circle cx="24" cy="9" r="5" fill="#f3ead2"/><path d="M12 17h24c0 8-5 13-12 13S12 25 12 17z" fill="#c9a65a"/><rect x="22" y="30" width="4" height="8" fill="#c9a65a"/><path d="M15 42c0-3 4-4 9-4s9 1 9 4z" fill="#c9a65a"/><path d="M24 19v8M21 22h6" stroke="#7a4f12" stroke-width="1.6"/></svg>`,
   bautismo: `<svg viewBox="0 0 48 48"><path d="M24 40C12 40 6 30 8 20c6-1 11-8 16-12 5 4 10 11 16 12 2 10-4 20-16 20z" fill="#efe2c4"/><path d="M24 12v26M17 16l4 22M31 16l-4 22M11 22l9 16M37 22l-9 16" stroke="#c9a65a" stroke-width="1.2" fill="none"/><path d="M24 20v8M21 23h6" stroke="#7a4f12" stroke-width="1.8"/></svg>`,
   matrimonio: `<svg viewBox="0 0 48 48"><path d="M24 42S6 31 6 18a9 9 0 0 1 18-3 9 9 0 0 1 18 3c0 13-18 24-18 24z" fill="#efe2c4"/><circle cx="20" cy="24" r="6.5" fill="none" stroke="#c9a65a" stroke-width="3"/><circle cx="28" cy="24" r="6.5" fill="none" stroke="#e0b84e" stroke-width="3"/></svg>`,
-  confirmacion: `<svg viewBox="0 0 48 48"><path d="M24 14c-4 0-6 3-6 6l-13-5c2 7 7 11 13 12l-3 9 9-6 9 6-3-9c6-1 11-5 13-12l-13 5c0-3-2-6-6-6z" fill="#f3ead2"/><circle cx="24" cy="10" r="3" fill="#f3ead2"/><path d="M14 40l4-6M34 40l-4-6M24 42v-6" stroke="#c9a65a" stroke-width="2.4" stroke-linecap="round"/></svg>`,
+  confirmacion: `<svg viewBox="0 0 48 48"> <g stroke="#c9a65a" stroke-width="1.2" stroke-linecap="round" opacity=".85"> <path d="M17 34l-4 7M23 35l-1 8M29 34l2 7M35 31l5 6"/> </g> <path d="M22.5 23C21 17 18.5 12.5 15 9c4.5 2 8 6 9.8 12.5z" fill="#d9c7a0"/> <path d="M7.6 20.2c0-3.1 2.4-5.2 5.2-4.9 3 .3 4.6 2.6 6.4 5 3.3 3.6 11.6 3.6 17.6-.4l9-5.2-3.3 6 4.3.6-7.6 3.6c-5.6 5.4-15.2 7.6-21.6 5.2-5.3-2-9.5-5.2-10-9.9z" fill="#fbf6e8"/> <path d="M21 21.5c2-6.5 6.5-13 14.5-18.5-.6 3.2-2 5.4-3.2 6.8 2.8-.9 5.6-1.9 8.4-3.6-1.6 3.6-4.2 6-6.6 7.4 2.2 0 4.4-.3 6.4-1.2-2.8 4.8-7.6 8.2-13.6 10.2z" fill="#f3ead2"/> <g stroke="#c9a65a" stroke-width=".55" fill="none" opacity=".7"> <path d="M24.5 19c2-3.5 5-7 8.5-9.5M26.5 21c2.6-2.4 6-4.6 9.5-6"/> </g> <path d="M7.9 18.8L3.6 20.3l4.4 1.1z" fill="#c9a65a"/> <circle cx="10.6" cy="18.6" r=".85" fill="#1f2f5c"/> </svg>`,
 };
 const IC = {
   menu: '<svg viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg>',
@@ -266,10 +267,12 @@ function irA(vista) { estado.vista = vista; render(); window.scrollTo(0, 0); }
 /* ---------------- MENÚ PRINCIPAL ---------------- */
 function vistaMenu() {
   const cfg = estado.config;
-  const opcFirmas = cfg.firmas.map((f, i) => `<option value="${i}" ${i == cfg.firmaActual ? 'selected' : ''}>${esc(f.nombre)} — ${esc(f.cargo)}</option>`).join('');
+  const bloq = sinFirma() ? 'disabled' : '';
+  const opcFirmas = (sinFirma() ? '<option value="" selected disabled>Elige quién firma…</option>' : '') +
+    cfg.firmas.map((f, i) => `<option value="${i}" ${i === estado.firma ? 'selected' : ''}>${esc(f.nombre)} — ${esc(f.cargo)}</option>`).join('');
   const grupos = GRUPOS.map(g => {
     const botones = CERTIFICADOS.filter(c => c.grupo === g.id).map(c =>
-      `<button class="cert ${c.estado === 'pendiente' ? 'pend' : ''}" data-abrir="${c.id}">${c.estado === 'pendiente' ? '<span class="pill">pendiente</span>' : ''}${esc(c.nombre)}</button>`).join('');
+      `<button class="cert ${c.estado === 'pendiente' ? 'pend' : ''}" data-abrir="${c.id}" ${bloq}>${c.estado === 'pendiente' ? '<span class="pill">pendiente</span>' : ''}${esc(c.nombre)}</button>`).join('');
     return `<div class="grupo"><div><div class="icono">${ICONOS[g.id]}</div><div class="etq">${g.nombre}</div></div><div class="botones">${botones}</div></div>`;
   }).join('');
   const r = actual(), { i, n } = posicion();
@@ -279,10 +282,10 @@ function vistaMenu() {
   <header class="barra"><h1>Certificados</h1><span data-chip>${chipDrive()}</span><button class="btn-cab" data-ir="parroquia">⚙ Datos de la parroquia</button></header>
   <main>
     <div class="menu-top">
-      <div class="tarjeta">
+      <div class="tarjeta ${sinFirma() ? 'pide-firma' : ''}">
         <h3>Firma</h3>
         <div class="fila"><select id="selFirma">${opcFirmas}</select><button class="btn" data-ir="firmantes">Firmantes</button></div>
-        <p class="nota">Quien firma los certificados. Se puede cambiar también en cada pantalla.</p>
+        <p class="nota">${sinFirma() ? '<strong>Elige quién firma para empezar.</strong> Hasta entonces los certificados y los registros están bloqueados.' : 'Quien firma los certificados. Se puede cambiar también en cada pantalla.'}</p>
       </div>
       <div class="tarjeta">
         <div class="cab-registros"><h3>Registros</h3><span class="contador">${tieneDatos(r) ? `Registro ${i + 1} de ${n}` : 'Registro nuevo'} · ${total} guardado${total === 1 ? '' : 's'}</span></div>
@@ -291,11 +294,11 @@ function vistaMenu() {
           : '<div class="bloque"><strong class="vacio">Registro vacío</strong><span>Rellena cualquier certificado para empezar</span></div>'}
         </div>
         <div class="botonera">
-          <button class="btn prim" data-registro="nuevo">${IC.nuevo}Nuevo</button>
-          <button class="btn" data-registro="buscar">${IC.buscar}Buscar</button>
-          <button class="btn" data-registro="anterior" title="Registro anterior">${IC.ant}Anterior</button>
-          <button class="btn" data-registro="siguiente" title="Registro siguiente">Siguiente${IC.sig}</button>
-          <button class="btn peligro" data-registro="eliminar" title="Eliminar este registro">${IC.papelera}Eliminar</button>
+          <button class="btn prim" data-registro="nuevo" ${bloq}>${IC.nuevo}Nuevo</button>
+          <button class="btn" data-registro="buscar" ${bloq}>${IC.buscar}Buscar</button>
+          <button class="btn" data-registro="anterior" ${bloq} title="Registro anterior">${IC.ant}Anterior</button>
+          <button class="btn" data-registro="siguiente" ${bloq} title="Registro siguiente">Siguiente${IC.sig}</button>
+          <button class="btn peligro" data-registro="eliminar" ${bloq} title="Eliminar este registro">${IC.papelera}Eliminar</button>
         </div>
       </div>
     </div>
@@ -324,7 +327,7 @@ function vistaFormulario() {
   const cert = CERTIFICADOS.find(c => c.id === estado.certId);
   const listo = cert.estado === 'listo';
   const cfg = estado.config;
-  const opcFirmas = cfg.firmas.map((f, i) => `<option value="${i}" ${i == cfg.firmaActual ? 'selected' : ''}>${esc(f.nombre)} — ${esc(f.cargo)}</option>`).join('');
+  const opcFirmas = cfg.firmas.map((f, i) => `<option value="${i}" ${i === estado.firma ? 'selected' : ''}>${esc(f.nombre)} — ${esc(f.cargo)}</option>`).join('');
   cert.campos.forEach(c => { if (c.tipo === 'select' && !estado.registro[c.k]) estado.registro[c.k] = c.opciones[0]; });
   const campos = cert.campos.length ? cert.campos.map(campoHTML).join('')
     : '<p class="nota" style="grid-column:1/-1">Esta pantalla todavía no está hecha. Cuando me pases la captura y un PDF de ejemplo, la monto.</p>';
@@ -530,6 +533,7 @@ document.addEventListener('click', async e => {
   const t = e.target.closest('button'); if (!t) return;
   if (t.dataset.ir) irA(t.dataset.ir);
   else if (t.id === 'previa') abrirAmpliada();
+  else if ((t.dataset.abrir || t.dataset.registro) && sinFirma()) aviso('Primero elige quién firma.');
   else if (t.dataset.abrir) { estado.certId = t.dataset.abrir; irA('form'); }
   else if (t.dataset.registro) {
     const a = t.dataset.registro;
@@ -560,8 +564,10 @@ document.addEventListener('click', async e => {
   else if (t.id === 'anadirFirma') { estado.config.firmas.push({ nombre: '', cargo: '', firma: '' }); guardarConfig(); render(); }
   else if (t.dataset.borrarf) {
     if (await confirmar('¿Eliminar este firmante?', 'Eliminar')) {
-      estado.config.firmas.splice(+t.dataset.borrarf, 1);
-      estado.config.firmaActual = 0; guardarConfig(); render();
+      const k = +t.dataset.borrarf;
+      estado.config.firmas.splice(k, 1);
+      if (estado.firma === k) estado.firma = null; else if (estado.firma > k) estado.firma--;
+      guardarConfig(); render();
     }
   }
   else if (t.dataset.quitar) { estado.config[t.dataset.quitar] = ''; guardarConfig(); render(); }
@@ -592,7 +598,7 @@ document.addEventListener('input', e => {
 
 document.addEventListener('change', async e => {
   const el = e.target;
-  if (el.id === 'selFirma') { estado.config.firmaActual = +el.value; guardarConfig(); actualizarPrevia(); }
+  if (el.id === 'selFirma') { estado.firma = +el.value; if (estado.vista === 'menu') render(); else actualizarPrevia(); }
   else if (el.dataset.img || el.dataset.firma !== undefined) {
     const f = el.files && el.files[0]; if (!f) return;
     try {

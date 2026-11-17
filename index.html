@@ -67,7 +67,11 @@
     font-size: 12px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; line-height: 1.25;
     position: relative; text-align: center;
   }
-  .cert:hover { filter: brightness(1.15); }
+  .cert:hover:not(:disabled) { filter: brightness(1.15); }
+  .cert:disabled, .btn:disabled { opacity: .4; cursor: not-allowed; filter: grayscale(.6); }
+  .pide-firma { border-color: var(--oro); box-shadow: 0 0 0 3px rgba(201,166,90,.25); }
+  .pide-firma select { border-color: var(--oro); }
+  .pide-firma .nota strong { color: var(--tinta); }
   .cert.pend { background: linear-gradient(180deg, #8a8f9c, #5f6472); color: #eef0f4; }
   .cert .pill { position: absolute; top: 6px; right: 6px; font-size: 9px; background: rgba(255,255,255,.18); padding: 2px 6px; border-radius: 999px; letter-spacing: .05em; }
   .leyenda { font-size: 12px; color: var(--suave); margin-top: 6px; display: flex; gap: 16px; }
