@@ -4,4 +4,4 @@
    No es secreto: identifica a la aplicación ante Google.
    Orígenes autorizados: https://javierscervera-rgb.github.io
    ============================================================ */
-window.GOOGLE_CLIENT_ID = '';
+window.GOOGLE_CLIENT_ID = '566558832672-5sj89qujqu783pbtd23obo7movdd2be3.apps.googleusercontent.com';
