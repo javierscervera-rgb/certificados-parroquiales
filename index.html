@@ -44,7 +44,7 @@
   .tarjeta h3 { margin: 0 0 10px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--suave); font-weight: 600; }
   .fila { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .fila select { flex: 1; min-width: 180px; }
-  select, input[type=text], input[type=date], input[type=time], input[type=number], textarea {
+  select, input[type=text], input[type=email], input[type=date], input[type=time], input[type=number], textarea {
     border: 1px solid var(--borde); background: #fff; border-radius: 7px; padding: 8px 10px; width: 100%;
   }
   input:focus, select:focus, textarea:focus { outline: 2px solid var(--azul-2); outline-offset: -1px; border-color: transparent; }
@@ -116,6 +116,35 @@
   .firmante { display: grid; gap: 12px; }
   .imgbox .vista.ancha { width: 180px; }
 
+
+  /* ---------- REGISTROS Y DRIVE ---------- */
+  .chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #4a4f5c; color: #cfd3dc; background: transparent; border-radius: 999px; padding: 6px 12px; font-size: 12px; white-space: nowrap; max-width: 46vw; overflow: hidden; text-overflow: ellipsis; }
+  button.chip { cursor: pointer; }
+  .chip.accion { border-color: var(--oro); color: #f0deb0; }
+  .chip.ok { border-color: #3f7a55; color: #bfe3c9; }
+  .chip.aviso { border-color: #b8742e; color: #f5cf9f; }
+  .registro-actual { background: #fff; border: 1px solid var(--borde); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; min-width: 0; }
+  .registro-actual strong { display: block; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .registro-actual span { font-size: 12px; color: var(--suave); }
+  .botonera { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .botonera .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 6px; min-width: 0; }
+  .btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; flex: none; }
+  .caja.ancha { max-width: 620px; }
+  .resultados { margin-top: 12px; max-height: 55vh; overflow: auto; display: grid; gap: 6px; }
+  .resultado { text-align: left; border: 1px solid var(--borde); background: #fff; border-radius: 8px; padding: 10px 12px; }
+  .resultado:hover, .resultado.on { border-color: var(--azul-2); }
+  .resultado strong { display: block; }
+  .resultado span { font-size: 12px; color: var(--suave); }
+  .check { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+  .check input { width: auto; }
+  label.archivo { display: inline-block; cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  label.archivo input { display: none; }
+  .imgbox-txt { min-width: 0; flex: 1; display: grid; gap: 6px; justify-items: start; }
+  .imgbox-txt .nota { margin: 0; }
+  .una-columna { max-width: 760px; display: grid; gap: 16px; }
+  .una-columna > .btn { justify-self: start; }
+  a.btn { text-decoration: none; color: inherit; text-align: center; }
+
   .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--tinta); color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90vw; }
   .toast.on { opacity: 1; }
   .modal { position: fixed; inset: 0; background: rgba(20,22,28,.45); display: grid; place-items: center; padding: 20px; }
@@ -134,6 +163,8 @@
     .lateral { position: static; display: grid; grid-template-columns: 1fr 1fr; }
     .miniatura { grid-row: span 3; }
     .grupo { grid-template-columns: 1fr; }
+    .botonera { grid-template-columns: 1fr 1fr; }
+    header.barra { flex-wrap: wrap; }
     .grupo > div:first-child { display: flex; align-items: center; gap: 12px; }
     .grupo .etq { margin: 0; }
     .icono { width: 56px; height: 56px; }
@@ -145,8 +176,12 @@
 <div id="app"></div>
 <div class="toast" id="toast"></div>
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="config.js"></script>
 <script src="plantillas.js"></script>
+<script src="sexo.js"></script>
 <script src="motor.js"></script>
+<script src="google.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

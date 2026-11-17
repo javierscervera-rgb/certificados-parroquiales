@@ -1,7 +1,7 @@
 /* ============================================================
-   APLICACIÓN: menú, pantallas de datos, configuración
-   Prototipo: guarda la configuración y el registro actual en este
-   navegador. En la versión final esto irá al Google Drive de la parroquia.
+   APLICACIÓN: menú, registros, pantallas de datos, configuración
+   Los datos se guardan siempre en este navegador y, si la parroquia
+   se conecta con Google, también en su Google Drive.
    ============================================================ */
 
 const CONFIG_DEFECTO = {
@@ -34,14 +34,30 @@ const Almacen = {
   }
 };
 
+const ahora = () => new Date().toISOString();
+const nuevoId = () => 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const nuevoRegistro = () => ({ id: nuevoId(), creado: ahora(), actualizado: ahora(), datos: {} });
+
 const estado = {
   config: Object.assign(structuredClone(CONFIG_DEFECTO), Almacen.leer('config', {})),
-  registro: Almacen.leer('registro', {}),
+  registros: Almacen.leer('registros', null),
+  actualId: Almacen.leer('actual', null),
   fechaDocumento: hoyISO(),
   vista: 'menu',
   certId: null,
   descargas: null,
 };
+// Migración desde la primera versión (un único registro)
+if (!Array.isArray(estado.registros)) {
+  const viejo = Almacen.leer('registro', null);
+  const r = nuevoRegistro(); if (viejo) r.datos = viejo;
+  estado.registros = [r];
+}
+if (!estado.registros.length) estado.registros.push(nuevoRegistro());
+if (!estado.registros.find(r => r.id === estado.actualId)) estado.actualId = estado.registros[estado.registros.length - 1].id;
+
+const actual = () => estado.registros.find(r => r.id === estado.actualId);
+Object.defineProperty(estado, 'registro', { get: () => actual().datos });
 
 function hoyISO() {
   const d = new Date();
@@ -49,9 +65,10 @@ function hoyISO() {
 }
 const $ = (sel, raiz = document) => raiz.querySelector(sel);
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+const sinAcentos = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 function aviso(msg) {
   const t = $('#toast'); t.textContent = msg; t.classList.add('on');
-  clearTimeout(aviso._t); aviso._t = setTimeout(() => t.classList.remove('on'), 3200);
+  clearTimeout(aviso._t); aviso._t = setTimeout(() => t.classList.remove('on'), 3600);
 }
 function confirmar(msg, si = 'Sí', no = 'Cancelar') {
   return new Promise(res => {
@@ -62,9 +79,99 @@ function confirmar(msg, si = 'Sí', no = 'Cancelar') {
     document.body.appendChild(m);
   });
 }
-function guardarConfig() { if (!Almacen.guardar('config', estado.config)) aviso('No se pudo guardar en este navegador (imágenes demasiado grandes).'); }
-function guardarRegistro() { Almacen.guardar('registro', estado.registro); }
+
+/* ---------------- GUARDAR ---------------- */
+const tieneDatos = r => Object.entries(r.datos).some(([k, v]) => k !== 'sexo' && k !== 'sexo_manual' && k !== 'motivo_bendicion' && k !== 'conyuge' && v && String(v).trim());
+const registrosGuardables = () => estado.registros.filter(r => tieneDatos(r) || r.id === estado.actualId);
+function guardarConfig() {
+  if (!Almacen.guardar('config', estado.config)) aviso('No se pudo guardar en este navegador (imágenes demasiado grandes).');
+  Google.cambiado('config');
+}
+function guardarRegistro() {
+  actual().actualizado = ahora();
+  Almacen.guardar('registros', registrosGuardables());
+  Almacen.guardar('actual', estado.actualId);
+  Google.cambiado('registros');
+}
 function firmante() { return estado.config.firmas[estado.config.firmaActual] || estado.config.firmas[0] || {}; }
+
+// Lo que ve Google: datos para subir y cómo aplicar lo que baja
+Google.usarProveedor({
+  obtenerDatos: () => ({ config: estado.config, registros: estado.registros.filter(tieneDatos) }),
+  aplicarDatos: (config, registros) => {
+    estado.config = Object.assign(structuredClone(CONFIG_DEFECTO), config);
+    const vacio = actual() && !tieneDatos(actual()) ? actual() : null;
+    estado.registros = registros.length ? registros : [nuevoRegistro()];
+    if (vacio && !estado.registros.find(r => r.id === vacio.id)) estado.registros.push(vacio);
+    if (!estado.registros.find(r => r.id === estado.actualId)) estado.actualId = estado.registros[estado.registros.length - 1].id;
+    Almacen.guardar('config', estado.config);
+    Almacen.guardar('registros', registrosGuardables());
+    if (estado.vista !== 'form' || !document.activeElement?.dataset?.k) render();
+  }
+});
+
+/* ---------------- REGISTROS ---------------- */
+function tituloRegistro(r) {
+  const d = r.datos, j = (a, b) => [a, b].filter(x => x && x.trim()).join(' ').trim();
+  const persona = j(d.nombre, d.apellidos);
+  const novios = [j(d.novio_nombre, d.novio_apellidos), j(d.novia_nombre, d.novia_apellidos)].filter(Boolean).join(' y ');
+  return persona || novios || '(registro vacío)';
+}
+function posicion() {
+  const lista = estado.registros;
+  return { i: lista.findIndex(r => r.id === estado.actualId), n: lista.length };
+}
+function irARegistro(id) { estado.actualId = id; Almacen.guardar('actual', id); render(); }
+function crearRegistro() {
+  if (!tieneDatos(actual())) { aviso('Ya estás en un registro vacío.'); return; }
+  const r = nuevoRegistro();
+  estado.registros.push(r);
+  estado.actualId = r.id;
+  Almacen.guardar('registros', registrosGuardables()); Almacen.guardar('actual', r.id);
+  render(); aviso('Registro nuevo.');
+}
+function moverRegistro(paso) {
+  // los registros vacíos que no son el actual no cuentan
+  estado.registros = estado.registros.filter(r => tieneDatos(r) || r.id === estado.actualId);
+  const { i, n } = posicion();
+  const j = i + paso;
+  if (j < 0 || j >= n) { aviso(paso < 0 ? 'Es el primer registro.' : 'Es el último registro.'); return; }
+  irARegistro(estado.registros[j].id);
+}
+function resumenRegistro(r) {
+  const d = r.datos, partes = [];
+  if (d.f_bau) partes.push('Bautismo ' + H.fecha(d.f_bau));
+  if (d.f_conf) partes.push('Confirmación ' + H.fecha(d.f_conf));
+  if (d.f_mat) partes.push('Matrimonio ' + H.fecha(d.f_mat));
+  if (d.f_nac && !partes.length) partes.push('Nacimiento ' + H.fecha(d.f_nac));
+  return partes.join(' · ');
+}
+function abrirBusqueda() {
+  const m = document.createElement('div');
+  m.className = 'modal'; m.id = 'busqueda';
+  m.innerHTML = `<div class="caja ancha">
+    <div class="fila" style="justify-content:space-between;margin-bottom:12px"><h3 style="margin:0">Buscar registro</h3><button class="btn" data-cerrar>Cerrar</button></div>
+    <input type="text" id="textoBusqueda" placeholder="Escribe nombres o apellidos (novio, novia, padres…)" autocomplete="off">
+    <div class="resultados" id="resultados"></div></div>`;
+  m.addEventListener('click', e => {
+    if (e.target === m || e.target.closest('[data-cerrar]')) m.remove();
+    const r = e.target.closest('[data-ir-registro]');
+    if (r) { m.remove(); irARegistro(r.dataset.irRegistro); }
+  });
+  document.body.appendChild(m);
+  const pintar = () => {
+    const palabras = sinAcentos($('#textoBusqueda').value).split(/\s+/).filter(Boolean);
+    const lista = estado.registros.filter(tieneDatos).filter(r => {
+      const texto = sinAcentos(Object.values(r.datos).join(' '));
+      return palabras.every(p => texto.includes(p));
+    }).slice().reverse();
+    $('#resultados').innerHTML = lista.length ? lista.slice(0, 60).map(r =>
+      `<button class="resultado ${r.id === estado.actualId ? 'on' : ''}" data-ir-registro="${r.id}"><strong>${esc(tituloRegistro(r))}</strong><span>${esc(resumenRegistro(r))}</span></button>`).join('')
+      : `<p class="nota">${palabras.length ? 'No hay ningún registro que coincida.' : 'Todavía no hay registros guardados.'}</p>`;
+  };
+  $('#textoBusqueda').addEventListener('input', pintar);
+  pintar(); $('#textoBusqueda').focus();
+}
 
 /* ---------------- ICONOS ---------------- */
 const ICONOS = {
@@ -75,10 +182,45 @@ const ICONOS = {
 };
 const IC = {
   menu: '<svg viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg>',
+  nuevo: '<svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M12 11v6M9 14h6"/></svg>',
   pdf: '<svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M12 10v7M9 14l3 3 3-3"/></svg>',
   pluma: '<svg viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M14 4l4 4-9 9H5v-4z"/></svg>',
   mail: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>',
+  buscar: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>',
+  ant: '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
+  sig: '<svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>',
 };
+
+/* ---------------- INDICADOR DE GOOGLE DRIVE ---------------- */
+function chipDrive() {
+  const g = Google.estado();
+  if (!g.configurado) return `<span class="chip" title="Falta el ID de cliente de Google en config.js">☁ Drive sin configurar</span>`;
+  if (!g.disponible) return `<span class="chip" title="El inicio de sesión de Google no carga en esta página">☁ Drive no disponible aquí</span>`;
+  if (g.estado === 'desconectado') return `<button class="chip accion" data-google="conectar">☁ Conectar con Google Drive</button>`;
+  if (g.estado === 'conectando') return `<span class="chip">☁ Conectando…</span>`;
+  if (g.estado === 'caducado') return `<button class="chip aviso" data-google="reconectar" title="${esc(g.mensaje)}">☁ Reconectar Drive</button>`;
+  if (g.estado === 'error') return `<button class="chip aviso" data-google="${g.usuario ? 'reconectar' : 'conectar'}" title="${esc(g.mensaje)}">☁ ${esc(g.mensaje).slice(0, 60)} · Reintentar</button>`;
+  const txt = g.estado === 'guardando' ? 'Guardando…' : 'Guardado';
+  return `<button class="chip ok" data-google="menu" title="${esc(g.usuario?.email || '')}">☁ ${txt} · ${esc(g.usuario?.email || '')}</button>`;
+}
+function pintarChip() { document.querySelectorAll('[data-chip]').forEach(el => { el.innerHTML = chipDrive(); }); }
+Google.suscribir(pintarChip);
+
+function menuDrive() {
+  const m = document.createElement('div');
+  m.className = 'modal';
+  const g = Google.estado();
+  m.innerHTML = `<div class="caja"><h3 style="margin-top:0">Google Drive</h3>
+    <p>Conectado como <strong>${esc(g.usuario?.email)}</strong>. Los registros y la configuración se guardan solos en la carpeta «Certificados parroquiales» de este Drive.</p>
+    <div class="fila" style="flex-direction:column;align-items:stretch">
+      <a class="btn" href="${Google.urlHoja()}" target="_blank" rel="noopener">Abrir la hoja de registros</a>
+      <a class="btn" href="${Google.urlCarpeta()}" target="_blank" rel="noopener">Abrir la carpeta en Drive</a>
+      <button class="btn" data-google="desconectar">Desconectar esta cuenta</button>
+      <button class="btn prim" data-cerrar>Cerrar</button>
+    </div></div>`;
+  m.addEventListener('click', e => { if (e.target === m || e.target.closest('[data-cerrar]') || e.target.closest('[data-google]')) m.remove(); });
+  document.body.appendChild(m);
+}
 
 /* ---------------- RENDER GENERAL ---------------- */
 function render() {
@@ -87,9 +229,9 @@ function render() {
   else if (estado.vista === 'parroquia') app.innerHTML = vistaParroquia();
   else if (estado.vista === 'firmantes') app.innerHTML = vistaFirmantes();
   else app.innerHTML = vistaFormulario();
-  window.scrollTo(0, 0);
   if (estado.vista === 'form') actualizarPrevia();
 }
+function irA(vista) { estado.vista = vista; render(); window.scrollTo(0, 0); }
 
 /* ---------------- MENÚ PRINCIPAL ---------------- */
 function vistaMenu() {
@@ -100,28 +242,29 @@ function vistaMenu() {
       `<button class="cert ${c.estado === 'pendiente' ? 'pend' : ''}" data-abrir="${c.id}">${c.estado === 'pendiente' ? '<span class="pill">pendiente</span>' : ''}${esc(c.nombre)}</button>`).join('');
     return `<div class="grupo"><div><div class="icono">${ICONOS[g.id]}</div><div class="etq">${g.nombre}</div></div><div class="botones">${botones}</div></div>`;
   }).join('');
-  const hayRegistro = Object.values(estado.registro).some(v => v && String(v).trim());
+  const r = actual(), { i, n } = posicion();
+  const total = estado.registros.filter(tieneDatos).length;
   return `
-  <header class="barra"><h1>Certificados</h1><button class="btn-cab" data-ir="firmantes">✒ Firmantes</button><button class="btn-cab" data-ir="parroquia">⚙ Datos de la parroquia</button></header>
+  <header class="barra"><h1>Certificados</h1><span data-chip>${chipDrive()}</span><button class="btn-cab" data-ir="parroquia">⚙ Datos de la parroquia</button></header>
   <main>
     <div class="menu-top">
       <div class="tarjeta">
         <h3>Firma</h3>
         <div class="fila"><select id="selFirma">${opcFirmas}</select><button class="btn" data-ir="firmantes">Firmantes</button></div>
-        <div class="fila" style="margin-top:12px">
-          <button class="btn prim" id="nuevoRegistro">Nuevo registro</button>
-          <span class="nota" style="margin:0">${hayRegistro ? 'Hay datos de un registro en curso: se rellenan solos en cada certificado.' : 'Empieza un registro nuevo para cada persona o pareja.'}</span>
-        </div>
+        <p class="nota">Quien firma los certificados. Se puede cambiar también en cada pantalla.</p>
       </div>
-      <div class="tarjeta busqueda">
-        <h3>Búsqueda</h3>
-        <div class="campos" style="grid-template-columns:1fr 1fr;display:grid;gap:8px">
-          <input type="text" placeholder="nombre esposo/padre" disabled>
-          <input type="text" placeholder="apellidos esposo/padre" disabled>
-          <input type="text" placeholder="nombre esposa/madre" disabled>
-          <input type="text" placeholder="apellidos esposa/madre" disabled>
+      <div class="tarjeta">
+        <h3>Registros</h3>
+        <div class="registro-actual">
+          <strong>${esc(tituloRegistro(r))}</strong>
+          <span>${tieneDatos(r) ? `Registro ${i + 1} de ${n}` : 'Registro nuevo'} · ${total} guardado${total === 1 ? '' : 's'}${resumenRegistro(r) ? ' · ' + esc(resumenRegistro(r)) : ''}</span>
         </div>
-        <div class="nota">La búsqueda llegará cuando los registros se guarden en el Google Drive de la parroquia.</div>
+        <div class="botonera">
+          <button class="btn prim" data-registro="nuevo">${IC.nuevo}Nuevo</button>
+          <button class="btn" data-registro="buscar">${IC.buscar}Buscar</button>
+          <button class="btn" data-registro="anterior" title="Registro anterior">${IC.ant}Anterior</button>
+          <button class="btn" data-registro="siguiente" title="Registro siguiente">Siguiente${IC.sig}</button>
+        </div>
       </div>
     </div>
     <div class="tarjeta">${grupos}
@@ -150,13 +293,12 @@ function vistaFormulario() {
   const listo = cert.estado === 'listo';
   const cfg = estado.config;
   const opcFirmas = cfg.firmas.map((f, i) => `<option value="${i}" ${i == cfg.firmaActual ? 'selected' : ''}>${esc(f.nombre)} — ${esc(f.cargo)}</option>`).join('');
-  // valores por defecto de los desplegables
   cert.campos.forEach(c => { if (c.tipo === 'select' && !estado.registro[c.k]) estado.registro[c.k] = c.opciones[0]; });
   const campos = cert.campos.length ? cert.campos.map(campoHTML).join('')
     : '<p class="nota" style="grid-column:1/-1">Esta pantalla todavía no está hecha. Cuando me pases la captura y un PDF de ejemplo, la monto.</p>';
 
   return `
-  <header class="barra"><h1>${esc(cert.titulo)}</h1></header>
+  <header class="barra"><h1>${esc(cert.titulo)}</h1><span data-chip>${chipDrive()}</span></header>
   <main>
     <div class="form-layout">
       <div class="tarjeta">
@@ -169,10 +311,11 @@ function vistaFormulario() {
       </div>
       <div class="lateral">
         <button class="acc" data-ir="menu">${IC.menu}Menú principal</button>
+        <button class="acc" data-registro="nuevo">${IC.nuevo}Nuevo registro</button>
         <button class="miniatura" id="previa" title="Pulsa para ampliar" ${listo ? '' : 'disabled'}></button>
         <button class="acc prim" data-pdf="1" ${listo ? '' : 'disabled'}>${IC.pluma}<span>PDF con firma<small>Con sello y firma escaneada</small></span></button>
         <button class="acc" data-pdf="0" ${listo ? '' : 'disabled'}>${IC.pdf}<span>PDF sin firma<small>Para firmar a mano</small></span></button>
-        <button class="acc" disabled title="Llegará con la conexión a Google">${IC.mail}<span>Enviar por mail<small>Próximamente</small></span></button>
+        <button class="acc" data-correo ${listo ? '' : 'disabled'}>${IC.mail}<span>Enviar por mail<small>PDF adjunto, desde tu Gmail</small></span></button>
       </div>
     </div>
   </main>`;
@@ -204,14 +347,18 @@ function abrirAmpliada() {
 }
 function ctx() { return { config: estado.config, firmante: firmante(), fechaDocumento: estado.fechaDocumento }; }
 
-async function generarPDF(conFirma) {
+async function crearPDF(conFirma) {
   const cert = CERTIFICADOS.find(c => c.id === estado.certId);
   const ops = await Motor.maquetar(cert, estado.registro, ctx(), conFirma);
   const bytes = await Motor.aPDF(ops, cert.titulo);
-  const quien = [estado.registro.apellidos || estado.registro.novio_apellidos, estado.registro.nombre || estado.registro.novio_nombre].filter(Boolean).join(' ');
+  const quien = tituloRegistro(actual()).replace('(registro vacío)', '');
   const nombre = `${cert.nombre}${quien ? ' - ' + quien : ''}.pdf`.replace(/[\\/:*?"<>|]/g, '');
-  const blob = new Blob([bytes], { type: 'application/pdf' });
+  return { bytes, nombre, cert };
+}
 
+async function descargarPDF(conFirma) {
+  const { bytes, nombre } = await crearPDF(conFirma);
+  const blob = new Blob([bytes], { type: 'application/pdf' });
   if (estado.descargas) {
     try { await estado.descargas.save({ filename: nombre, data: blob }); aviso('PDF guardado. Ábrelo para imprimirlo.'); return; }
     catch (e) { if (e && e.code === 'declined') return; }
@@ -222,13 +369,66 @@ async function generarPDF(conFirma) {
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
+/* ---------------- ENVIAR POR CORREO ---------------- */
+function abrirCorreo() {
+  const g = Google.estado();
+  if (!g.disponible) {
+    aviso(g.configurado ? 'El envío por correo solo funciona en la web de la aplicación.' : 'Falta configurar la conexión con Google.');
+    return;
+  }
+  const cert = CERTIFICADOS.find(c => c.id === estado.certId);
+  const f = firmante(), cfg = estado.config;
+  const quien = tituloRegistro(actual()).replace('(registro vacío)', '');
+  const asunto = `${cert.nombre}${quien ? ' - ' + quien : ''}`;
+  const texto = `Buenos días:\n\nLe adjunto el ${cert.nombre.toLowerCase()}${quien ? ' de ' + quien : ''}.\n\nUn saludo,\n\n${f.nombre || ''}\n${f.cargo || ''}\n${cfg.nombre || ''}`;
+  const m = document.createElement('div');
+  m.className = 'modal'; m.id = 'correo';
+  m.innerHTML = `<div class="caja ancha"><h3 style="margin-top:0">Enviar por correo</h3>
+    <div class="rejilla">
+      <div class="campo" style="grid-column:span 7"><label for="m_para">Para</label><input type="email" id="m_para" placeholder="correo@ejemplo.com" value="${esc(estado.registro.email || '')}"></div>
+      <div class="campo" style="grid-column:span 5"><label for="m_cc">CC (opcional)</label><input type="email" id="m_cc"></div>
+      <div class="campo" style="grid-column:1/-1"><label for="m_asunto">Asunto</label><input type="text" id="m_asunto" value="${esc(asunto)}"></div>
+      <div class="campo" style="grid-column:1/-1"><label for="m_texto">Mensaje</label><textarea id="m_texto" rows="8">${esc(texto)}</textarea></div>
+      <label class="check" style="grid-column:1/-1"><input type="checkbox" id="m_firma" checked> Adjuntar el PDF con sello y firma escaneada</label>
+    </div>
+    <p class="nota">Se envía desde tu cuenta de Gmail${g.usuario ? ` (${esc(g.usuario.email)})` : ''}. La primera vez Google te pedirá permiso para enviar correos.</p>
+    <div class="fila" style="justify-content:flex-end;margin-top:12px"><button class="btn" data-cerrar>Cancelar</button><button class="btn prim" id="m_enviar">Enviar</button></div>
+  </div>`;
+  m.addEventListener('click', e => { if (e.target === m || e.target.closest('[data-cerrar]')) m.remove(); });
+  document.body.appendChild(m);
+  $('#m_para').focus();
+}
+
+async function enviarCorreo(boton) {
+  const para = $('#m_para').value.trim(), cc = $('#m_cc').value.trim();
+  const valido = s => /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(s);
+  if (!valido(para)) { aviso('Revisa la dirección de correo.'); $('#m_para').focus(); return; }
+  if (cc && !cc.split(/[,;]\s*/).every(valido)) { aviso('Revisa la dirección en copia.'); return; }
+  const permiso = Google.prepararGmail(); // dentro del clic, por si Google abre su ventana
+  boton.disabled = true; boton.textContent = 'Enviando…';
+  try {
+    await permiso;
+    const { bytes, nombre } = await crearPDF($('#m_firma').checked);
+    await Google.enviarCorreo({ para, cc: cc.replace(/;/g, ','), asunto: $('#m_asunto').value, texto: $('#m_texto').value, adjunto: { nombre, bytes } });
+    $('#correo')?.remove();
+    aviso(`Enviado a ${para}.`);
+  } catch (e) {
+    console.error(e);
+    boton.disabled = false; boton.textContent = 'Enviar';
+    aviso('No se pudo enviar: ' + e.message);
+  }
+}
+
 /* ---------------- DATOS DE LA PARROQUIA ---------------- */
+function selectorArchivo(atributos, texto = 'Elegir imagen…') {
+  return `<label class="btn archivo"><input type="file" accept="image/*" ${atributos}>${texto}</label>`;
+}
 function vistaParroquia() {
   const c = estado.config;
   const inp = (k, label, w = 12, ph = '') => `<div class="campo" style="grid-column:span ${w}"><label for="cfg_${k}">${label}</label><input type="text" id="cfg_${k}" data-cfg="${k}" value="${esc(c[k])}" placeholder="${esc(ph)}"></div>`;
-  const img = (k, label, ayuda) => `<div class="campo"><label>${label}</label><div class="imgbox"><div class="vista">${c[k] ? `<img src="${c[k]}" alt="">` : 'sin imagen'}</div><div><input type="file" accept="image/*" data-img="${k}"><div class="nota">${ayuda}</div>${c[k] ? `<button class="btn" data-quitar="${k}" style="margin-top:6px">Quitar</button>` : ''}</div></div></div>`;
+  const img = (k, label, ayuda) => `<div class="campo"><label>${label}</label><div class="imgbox"><div class="vista">${c[k] ? `<img src="${c[k]}" alt="">` : 'sin imagen'}</div><div class="imgbox-txt">${selectorArchivo(`data-img="${k}"`)}<div class="nota">${ayuda}</div>${c[k] ? `<button class="btn" data-quitar="${k}">Quitar</button>` : ''}</div></div></div>`;
   return `
-  <header class="barra"><h1>Datos de la parroquia</h1><button class="btn-cab" data-ir="menu">← Volver al menú</button></header>
+  <header class="barra"><h1>Datos de la parroquia</h1><span data-chip>${chipDrive()}</span><button class="btn-cab" data-ir="menu">← Volver al menú</button></header>
   <main>
     <div class="config">
       <div class="tarjeta"><h3>Membrete</h3><div class="rejilla">
@@ -245,7 +445,6 @@ function vistaParroquia() {
         ${img('sello', 'Sello (junto a la firma)', 'Solo aparece en «PDF con firma».')}
       </div></div>
     </div>
-    <p class="nota" style="margin-top:16px">En este prototipo los datos se guardan solo en este navegador. En la versión final se guardarán en el Google Drive de la parroquia.</p>
   </main>`;
 }
 
@@ -258,14 +457,19 @@ function vistaFirmantes() {
         <div class="campo" style="grid-column:span 8"><label>Nombre y apellidos</label><input type="text" data-f="${i}" data-fk="nombre" value="${esc(f.nombre)}"></div>
         <div class="campo" style="grid-column:span 4"><label>Cargo</label><input type="text" data-f="${i}" data-fk="cargo" value="${esc(f.cargo)}" placeholder="Párroco, secretaria…"></div>
       </div>
-      <div class="imgbox"><div class="vista ancha">${f.firma ? `<img src="${f.firma}" alt="">` : 'sin firma'}</div><div><input type="file" accept="image/*" data-firma="${i}"><div class="nota">Firma escaneada, mejor en PNG con fondo transparente.</div>
-      <div class="fila" style="margin-top:6px">${f.firma ? `<button class="btn" data-quitarfirma="${i}">Quitar firma</button>` : ''}${c.firmas.length > 1 ? `<button class="btn" data-borrarf="${i}">Eliminar firmante</button>` : ''}</div></div></div>
+      <div class="imgbox"><div class="vista ancha">${f.firma ? `<img src="${f.firma}" alt="">` : 'sin firma'}</div>
+        <div class="imgbox-txt">${selectorArchivo(`data-firma="${i}"`, f.firma ? 'Cambiar firma…' : 'Subir firma escaneada…')}
+          <div class="nota">Mejor en PNG con fondo transparente.</div>
+          <div class="fila">${f.firma ? `<button class="btn" data-quitarfirma="${i}">Quitar firma</button>` : ''}${c.firmas.length > 1 ? `<button class="btn" data-borrarf="${i}">Eliminar firmante</button>` : ''}</div>
+        </div>
+      </div>
     </div>`).join('');
   return `
-  <header class="barra"><h1>Firmantes</h1><button class="btn-cab" data-ir="menu">← Volver al menú</button></header>
+  <header class="barra"><h1>Firmantes</h1><span data-chip>${chipDrive()}</span><button class="btn-cab" data-ir="menu">← Volver al menú</button></header>
   <main>
-    <div class="config">${firmas}</div>
-    <button class="btn prim" id="anadirFirma" style="margin-top:16px">+ Añadir firmante</button>
+    <div class="una-columna">${firmas}
+      <button class="btn prim" id="anadirFirma">+ Añadir firmante</button>
+    </div>
   </main>`;
 }
 
@@ -290,22 +494,33 @@ function leerImagen(file) {
 
 /* ---------------- EVENTOS ---------------- */
 document.addEventListener('click', async e => {
+  Google.renovarSiHaceFalta();
   const t = e.target.closest('button'); if (!t) return;
-  if (t.dataset.ir) { estado.vista = t.dataset.ir; render(); }
+  if (t.dataset.ir) irA(t.dataset.ir);
   else if (t.id === 'previa') abrirAmpliada();
-  else if (t.dataset.abrir) { estado.certId = t.dataset.abrir; estado.vista = 'form'; render(); }
+  else if (t.dataset.abrir) { estado.certId = t.dataset.abrir; irA('form'); }
+  else if (t.dataset.registro) {
+    const a = t.dataset.registro;
+    if (a === 'nuevo') crearRegistro();
+    else if (a === 'buscar') abrirBusqueda();
+    else moverRegistro(a === 'anterior' ? -1 : 1);
+  }
+  else if (t.dataset.google) {
+    const a = t.dataset.google;
+    if (a === 'conectar') Google.conectar();
+    else if (a === 'reconectar') Google.reconectar();
+    else if (a === 'desconectar') { if (await confirmar('¿Desconectar Google Drive en este navegador? Los datos siguen guardados en tu Drive.', 'Desconectar')) Google.desconectar(); }
+    else if (a === 'menu') menuDrive();
+  }
   else if (t.dataset.pdf) {
     t.disabled = true;
-    try { await generarPDF(t.dataset.pdf === '1'); } catch (err) { console.error(err); aviso('No se pudo generar el PDF.'); }
+    try { await descargarPDF(t.dataset.pdf === '1'); } catch (err) { console.error(err); aviso('No se pudo generar el PDF.'); }
     t.disabled = false;
   }
-  else if (t.id === 'nuevoRegistro') {
-    if (await confirmar('¿Empezar un registro nuevo? Se borrarán los datos que hay escritos ahora en las pantallas.', 'Empezar nuevo')) {
-      estado.registro = {}; guardarRegistro(); render(); aviso('Registro nuevo.');
-    }
-  }
+  else if (t.hasAttribute('data-correo')) abrirCorreo();
+  else if (t.id === 'm_enviar') enviarCorreo(t);
   else if (t.closest('[data-sexo]')) {
-    estado.registro.sexo = t.dataset.v; guardarRegistro();
+    estado.registro.sexo = t.dataset.v; estado.registro.sexo_manual = '1'; guardarRegistro();
     t.parentElement.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === t));
     actualizarPrevia();
   }
@@ -320,9 +535,23 @@ document.addEventListener('click', async e => {
   else if (t.dataset.quitarfirma) { estado.config.firmas[+t.dataset.quitarfirma].firma = ''; guardarConfig(); render(); }
 });
 
+// Sexo automático a partir del nombre (salvo que se haya elegido a mano)
+function sexoAutomatico() {
+  const d = estado.registro;
+  if (d.sexo_manual) return;
+  const s = Sexo.adivinar(d.nombre);
+  if (!s || s === d.sexo) return;
+  d.sexo = s;
+  document.querySelectorAll('[data-sexo] button').forEach(b => b.classList.toggle('on', b.dataset.v === s));
+}
+
 document.addEventListener('input', e => {
   const el = e.target;
-  if (el.dataset.k) { estado.registro[el.dataset.k] = el.value; guardarRegistro(); actualizarPrevia(); }
+  if (el.dataset.k) {
+    estado.registro[el.dataset.k] = el.value;
+    if (el.dataset.k === 'nombre') sexoAutomatico();
+    guardarRegistro(); actualizarPrevia();
+  }
   else if (el.id === 'fechaDoc') { estado.fechaDocumento = el.value; actualizarPrevia(); }
   else if (el.dataset.cfg) { estado.config[el.dataset.cfg] = el.value; guardarConfig(); }
   else if (el.dataset.f !== undefined && el.dataset.fk) { estado.config.firmas[+el.dataset.f][el.dataset.fk] = el.value; guardarConfig(); }
@@ -341,6 +570,12 @@ document.addEventListener('change', async e => {
   }
 });
 
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') ['#ampliada', '#busqueda', '#correo'].forEach(s => { const m = $(s); if (m) m.remove(); });
+  if (e.key === 'Enter' && e.target.closest('#busqueda')) { const r = $('#resultados .resultado'); if (r) r.click(); }
+});
+window.addEventListener('focus', () => Google.refrescar());
+
 /* ---------------- ARRANQUE ---------------- */
 (async () => {
   await Motor.iniciar();
@@ -349,6 +584,7 @@ document.addEventListener('change', async e => {
   if (window.claude && typeof window.claude.use === 'function') {
     window.claude.use('downloads').then(d => { estado.descargas = d; }).catch(() => {});
   }
+  // El script de Google carga aparte: cuando llega, se repinta el indicador
+  const espera = setInterval(() => { if (Google.estado().disponible) { clearInterval(espera); pintarChip(); } }, 300);
+  setTimeout(() => clearInterval(espera), 15000);
 })();
-
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { const m = $('#ampliada'); if (m) m.remove(); } });
