@@ -63,7 +63,8 @@ const Motor = {
     let neg = negritaBase;
     String(texto ?? '').split('**').forEach((trozo, i) => {
       if (i > 0) neg = !neg;
-      trozo.split(/\s+/).filter(Boolean).forEach(t => res.push({ t: this.limpiar(t, neg), neg }));
+      const pegado = res.length && trozo && !/^\s/.test(trozo); // "**Nombre**, hijo": la coma va pegada
+      trozo.split(/\s+/).filter(Boolean).forEach((t, j) => res.push({ t: this.limpiar(t, neg), neg, pegado: pegado && j === 0 }));
     });
     return res;
   },
@@ -96,17 +97,19 @@ const Motor = {
       const huecos = linea.length - 1;
       const extra = (!ultima && justificar && huecos > 0) ? esp + (x1 - xi - anchoLinea) / huecos : esp;
       let x = xi;
-      for (const p of linea) {
+      linea.forEach((p, k) => {
+        if (k > 0 && p.pegado) x -= extra;
         ops.push({ tipo: 'txt', t: p.t, x, y, tam, negrita: p.neg });
         x += p.w + extra;
-      }
+      });
       y += interlinea; primera = false; linea = []; anchoLinea = 0;
     };
     for (const p of palabras) {
       const xi = x0 + (primera ? sangria : 0);
-      const nuevo = linea.length ? anchoLinea + esp + p.w : p.w;
+      const sep = p.pegado ? 0 : esp;
+      const nuevo = linea.length ? anchoLinea + sep + p.w : p.w;
       if (linea.length && xi + nuevo > x1) volcar(false);
-      anchoLinea = linea.length ? anchoLinea + esp + p.w : p.w;
+      anchoLinea = linea.length ? anchoLinea + sep + p.w : p.w;
       linea.push(p);
     }
     if (linea.length) volcar(true);
@@ -119,6 +122,41 @@ const Motor = {
     if (alinear === 'der') x -= w;
     if (alinear === 'centro') x -= w / 2;
     return { tipo: 'txt', t, x, y, tam, negrita, color };
+  },
+
+  /* Línea suelta con **negritas**, alineada a la izquierda o centrada; opcionalmente subrayada */
+  lineaRica(texto, y, { x0 = M.izq, x1 = M.der, tam = M.cuerpo, centrar = false, negrita = false, subrayado = false, color, interlinea = M.interlinea } = {}) {
+    const pal = this.palabras(texto, negrita).map(p => ({ ...p, w: this.ancho(p.t, tam, p.neg) }));
+    const esp = this.ancho(' ', tam);
+    const maximo = centrar ? A4.w - 2 * 50 : x1 - x0;
+    // reparte en líneas que quepan
+    const lineas = [[]]; let ancho = 0;
+    pal.forEach(p => {
+      const sep = lineas[lineas.length - 1].length && !p.pegado ? esp : 0;
+      if (lineas[lineas.length - 1].length && ancho + sep + p.w > maximo) { lineas.push([]); ancho = 0; }
+      const l = lineas[lineas.length - 1];
+      ancho += (l.length && !p.pegado ? esp : 0) + p.w; l.push(p);
+    });
+    const ops = [];
+    lineas.forEach((l, k) => {
+      const total = l.reduce((a, p, j) => a + p.w + (j && !p.pegado ? esp : 0), 0);
+      let x = centrar ? (A4.w - total) / 2 : x0;
+      const yy = y + k * interlinea;
+      if (subrayado && l.length) ops.push({ tipo: 'linea', x1: x, y1: yy + 2, x2: x + total, y2: yy + 2, color: color || '#111111', grosor: 0.6 });
+      l.forEach((p, j) => { if (j && !p.pegado) x += esp; ops.push({ tipo: 'txt', t: p.t, x, y: yy, tam, negrita: p.neg, color }); x += p.w; });
+    });
+    return { ops, y: y + (lineas.length - 1) * interlinea };
+  },
+
+  /* Pie del exhorto: certificación de la parroquia que publica las amonestaciones */
+  pieExhorto(texto) {
+    const gris = '#555555', ops = [];
+    ops.push({ tipo: 'linea', x1: 40, y1: 618, x2: 555, y2: 618, color: '#bbbbbb', grosor: 0.8 });
+    const r = this.parrafo(texto, 638, { x0: 44, x1: 545, tam: 10.5, interlinea: 15, justificar: false });
+    r.ops.forEach(o => { o.color = gris; ops.push(o); });
+    ops.push(this.texto('En ________________ a ____ de ______________ de ______', 545, 712, 10.5, { alinear: 'der', color: gris }));
+    ops.push(this.texto('(Firma y sello)', 44, 742, 10.5, { color: gris }));
+    return ops;
   },
 
   /* Columna izquierda de la partida de bautismo */
@@ -164,7 +202,7 @@ const Motor = {
     const color = cfg.color || '#a8322d';
     const IL = doc.interlinea || M.interlinea;
     const partida = doc.formato === 'partida';
-    const cuerpo = partida ? { x0: 140, x1: 545, tam: 10.5, interlinea: 14, justificar: false } : { interlinea: IL };
+    const cuerpo = partida ? { x0: 140, x1: 545, tam: 10.5, interlinea: 14, justificar: false } : { interlinea: IL, ...(doc.cuerpo || {}) };
     const ops = [];
 
     // --- Cabecera
@@ -186,18 +224,22 @@ const Motor = {
       y += IL;
     } else {
       const lineas = doc.titulo.split('\n');
-      const tam = doc.tituloNegrita ? 16 : 17;
-      y = lineas.length > 2 ? 232 : lineas.length > 1 ? 240 : 251;
+      const tam = doc.tituloTam || (doc.tituloNegrita ? 16 : 17);
+      y = doc.tituloY || (lineas.length > 2 ? 232 : lineas.length > 1 ? 240 : 251);
       lineas.forEach((l, i) => ops.push(this.texto(l, A4.w / 2, y + i * 22, tam, { negrita: doc.tituloNegrita, alinear: 'centro' })));
-      y += (lineas.length - 1) * 22 + 51;
+      y += (lineas.length - 1) * 22 + (doc.tituloHueco || 51);
     }
     const yCuerpo = y;
 
     // --- Cuerpo
     doc.bloques.forEach((b, i) => {
-      if (i > 0) y += cuerpo.interlinea * (b.espacio ?? (doc.bloques[i - 1].linea ? 1 : 2));
-      else if (b.linea) y -= 16;
-      if (b.linea) { ops.push(this.texto(b.linea, cuerpo.x0 || M.izq, y, cuerpo.tam || M.cuerpo, { negrita: b.negrita })); return; }
+      if (i > 0) y += cuerpo.interlinea * (b.espacio ?? ((doc.bloques[i - 1].linea !== undefined || doc.bloques[i - 1].centro !== undefined) ? 1 : 2));
+      else if (b.linea !== undefined && !doc.tituloHueco) y -= 16;
+      if (b.linea !== undefined || b.centro !== undefined) {
+        const r = this.lineaRica(b.linea ?? b.centro, y, { x0: cuerpo.x0 || M.izq, x1: cuerpo.x1 || M.der, tam: cuerpo.tam || M.cuerpo, centrar: b.centro !== undefined, negrita: b.negrita, subrayado: b.subrayado, interlinea: cuerpo.interlinea });
+        ops.push(...r.ops); y = r.y;
+        return;
+      }
       const r = this.parrafo(b.p, y, { ...cuerpo, sangria: b.sangria ? 36 : 0, justificar: b.justificar ?? cuerpo.justificar ?? true });
       ops.push(...r.ops); y = r.y;
     });
@@ -213,8 +255,8 @@ const Motor = {
     const centrado = doc.cierreCentrado;
     const huecoCierre = (doc.cierreEspacio ?? (centrado ? 1.5 : 4)) * IL;
     const huecoFirma = (doc.firmaEspacio ?? (centrado ? 3 : 4)) * (partida ? 14 : IL);
-    const huecoCargo = partida ? 18 : 32;
-    const limite = doc.pie ? 715 : 800;
+    const huecoCargo = doc.cargoEspacio ?? (partida ? 18 : 32);
+    const limite = doc.limiteFirma ?? (doc.pie ? 715 : 800);
     let yCierre = doc.cierre ? y + huecoCierre : y;
     let yFdo = yCierre + huecoFirma;
     const exceso = yFdo + huecoCargo - limite;
@@ -232,6 +274,7 @@ const Motor = {
     if (firmante.cargo) ops.push(this.texto(firmante.cargo, M.der, yFdo + huecoCargo, M.cuerpo, { alinear: 'der' }));
 
     if (doc.pie === 'tablaComunicacion') ops.push(...this.tablaComunicacion());
+    if (doc.pie === 'exhorto') ops.push(...this.pieExhorto(doc.pieTexto));
     return ops;
   },
 

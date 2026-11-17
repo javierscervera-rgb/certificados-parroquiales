@@ -123,10 +123,17 @@
   .chip.accion { border-color: var(--oro); color: #f0deb0; }
   .chip.ok { border-color: #3f7a55; color: #bfe3c9; }
   .chip.aviso { border-color: #b8742e; color: #f5cf9f; }
-  .registro-actual { background: #fff; border: 1px solid var(--borde); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; min-width: 0; }
+  .cab-registros { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+  .cab-registros h3 { margin: 0; }
+  .contador { font-size: 12px; color: var(--suave); white-space: nowrap; }
+  .registro-actual { background: #fff; border: 1px solid var(--borde); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; min-width: 0; display: flex; flex-wrap: wrap; gap: 8px 28px; }
+  .registro-actual .bloque { min-width: 0; flex: 1 1 200px; }
   .registro-actual strong { display: block; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .registro-actual span { font-size: 12px; color: var(--suave); }
-  .botonera { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .registro-actual strong.vacio { color: var(--suave); font-weight: 500; }
+  .registro-actual span { display: block; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--suave); margin-top: 3px; }
+  .botonera { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+  .btn.peligro { color: #9a2a22; }
+  .btn.peligro:hover { border-color: #9a2a22; }
   .botonera .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 6px; min-width: 0; }
   .btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; flex: none; }
   .caja.ancha { max-width: 620px; }
@@ -164,6 +171,7 @@
     .miniatura { grid-row: span 3; }
     .grupo { grid-template-columns: 1fr; }
     .botonera { grid-template-columns: 1fr 1fr; }
+    .botonera .peligro { grid-column: 1 / -1; }
     header.barra { flex-wrap: wrap; }
     .grupo > div:first-child { display: flex; align-items: center; gap: 12px; }
     .grupo .etq { margin: 0; }

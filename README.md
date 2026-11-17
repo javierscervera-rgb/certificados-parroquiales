@@ -6,7 +6,7 @@ Aplicación web para generar los certificados que se usan habitualmente en las p
 - Funciona en el navegador, sin instalar nada.
 - Genera cada certificado en PDF (A4), con o sin firma y sello, listo para imprimir.
 - Cada parroquia configura una sola vez su membrete, su logo, su sello y sus firmantes.
-- Varios registros (personas o parejas) con búsqueda y navegación.
+- Varios registros (personas o parejas) con búsqueda, navegación y eliminación.
 - Detecta el sexo a partir del nombre (se puede corregir a mano).
 - Con la cuenta de Google de la parroquia: registros y configuración guardados en su
   Google Drive (carpeta «Certificados parroquiales») y envío de certificados por Gmail.
@@ -25,7 +25,8 @@ Aplicación web para generar los certificados que se usan habitualmente en las p
 | Matrimonio | Certificado de matrimonio | ✅ |
 | Matrimonio | Bendición apostólica (boda, bodas de plata, bodas de oro) | ✅ |
 | Matrimonio | Comunicación de matrimonio (con tabla de trámites) | ✅ |
-| Matrimonio | Expediente, Alegato V, amonestaciones, exhorto, registro civil | ⏳ falta pantalla y modelo |
+| Matrimonio | Exhorto de amonestaciones (con certificación de la parroquia que publica) | ✅ |
+| Matrimonio | Expediente, Alegato V, amonestaciones activas, registro civil | ⏳ falta pantalla y modelo |
 | Confirmación | Certificado de confirmación | ✅ |
 | Confirmación | Comunicación de confirmación | ✅ |
 

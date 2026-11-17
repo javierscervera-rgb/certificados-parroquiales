@@ -174,12 +174,12 @@ const Google = (() => {
       st.ids.config = await crearJSON(CONFIG, st.ids.carpeta, local.config);
       recordar('ids:' + st.usuario.email, st.ids);
     }
-    proveedor.aplicarDatos(config, registros);
-    // si había registros locales que Drive no tenía, se suben
-    if (registros.length !== remotos.length || registros.some(r => !remotos.find(x => x.id === r.id && x.actualizado === r.actualizado))) {
-      st.pendiente.registros = true;
-      await subir();
-    }
+    const final = proveedor.aplicarDatos(config, registros);
+    // si había cambios locales que Drive no tenía (registros nuevos o eliminados), se suben
+    const lista = final.registros;
+    if (final.configPendiente) st.pendiente.config = true;
+    if (lista.length !== remotos.length || lista.some(r => !remotos.find(x => x.id === r.id && x.actualizado === r.actualizado))) st.pendiente.registros = true;
+    if (st.pendiente.config || st.pendiente.registros) await subir();
   }
 
   async function conectar() {

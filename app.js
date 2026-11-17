@@ -99,7 +99,11 @@ function firmante() { return estado.config.firmas[estado.config.firmaActual] || 
 Google.usarProveedor({
   obtenerDatos: () => ({ config: estado.config, registros: estado.registros.filter(tieneDatos) }),
   aplicarDatos: (config, registros) => {
-    estado.config = Object.assign(structuredClone(CONFIG_DEFECTO), config);
+    // los registros eliminados en cualquier ordenador no vuelven
+    const eliminados = [...new Set([...(estado.config.eliminados || []), ...(config.eliminados || [])])];
+    const faltabanEnDrive = eliminados.length > (config.eliminados || []).length;
+    estado.config = Object.assign(structuredClone(CONFIG_DEFECTO), config, { eliminados });
+    registros = registros.filter(r => !eliminados.includes(r.id));
     const vacio = actual() && !tieneDatos(actual()) ? actual() : null;
     estado.registros = registros.length ? registros : [nuevoRegistro()];
     if (vacio && !estado.registros.find(r => r.id === vacio.id)) estado.registros.push(vacio);
@@ -107,6 +111,7 @@ Google.usarProveedor({
     Almacen.guardar('config', estado.config);
     Almacen.guardar('registros', registrosGuardables());
     if (estado.vista !== 'form' || !document.activeElement?.dataset?.k) render();
+    return { registros: estado.registros.filter(tieneDatos), configPendiente: faltabanEnDrive };
   }
 });
 
@@ -129,6 +134,30 @@ function crearRegistro() {
   estado.actualId = r.id;
   Almacen.guardar('registros', registrosGuardables()); Almacen.guardar('actual', r.id);
   render(); aviso('Registro nuevo.');
+}
+async function eliminarRegistro() {
+  const r = actual();
+  if (!tieneDatos(r)) { aviso('Este registro está vacío: no hay nada que eliminar.'); return; }
+  if (!await confirmar(`¿Eliminar el registro de ${tituloRegistro(r)}? Se borrará también de Google Drive y no se puede deshacer.`, 'Eliminar')) return;
+  const i = estado.registros.findIndex(x => x.id === r.id);
+  estado.config.eliminados = [...(estado.config.eliminados || []), r.id];
+  estado.registros.splice(i, 1);
+  const quedan = estado.registros.filter(tieneDatos);
+  if (!quedan.length) estado.registros = [nuevoRegistro()];
+  estado.actualId = (estado.registros[Math.min(i, estado.registros.length - 1)] || estado.registros[0]).id;
+  guardarConfig();
+  Almacen.guardar('registros', registrosGuardables()); Almacen.guardar('actual', estado.actualId);
+  Google.cambiado('registros');
+  render(); aviso('Registro eliminado.');
+}
+function personasRegistro(r) {
+  const d = r.datos, j = (a, b) => [a, b].filter(x => x && String(x).trim()).join(' ').trim();
+  const bloques = [];
+  const persona = j(d.nombre, d.apellidos);
+  if (persona) bloques.push({ lineas: [persona], etiqueta: 'Nombre y apellidos' });
+  const novio = j(d.novio_nombre, d.novio_apellidos), novia = j(d.novia_nombre, d.novia_apellidos);
+  if (novio || novia) bloques.push({ lineas: [novio || '—', novia || '—'], etiqueta: 'Novio y novia (matrimonio)' });
+  return bloques;
 }
 function moverRegistro(paso) {
   // los registros vacíos que no son el actual no cuentan
@@ -189,6 +218,7 @@ const IC = {
   buscar: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>',
   ant: '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
   sig: '<svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>',
+  papelera: '<svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg>',
 };
 
 /* ---------------- INDICADOR DE GOOGLE DRIVE ---------------- */
@@ -244,6 +274,7 @@ function vistaMenu() {
   }).join('');
   const r = actual(), { i, n } = posicion();
   const total = estado.registros.filter(tieneDatos).length;
+  const bloques = personasRegistro(r);
   return `
   <header class="barra"><h1>Certificados</h1><span data-chip>${chipDrive()}</span><button class="btn-cab" data-ir="parroquia">⚙ Datos de la parroquia</button></header>
   <main>
@@ -254,16 +285,17 @@ function vistaMenu() {
         <p class="nota">Quien firma los certificados. Se puede cambiar también en cada pantalla.</p>
       </div>
       <div class="tarjeta">
-        <h3>Registros</h3>
-        <div class="registro-actual">
-          <strong>${esc(tituloRegistro(r))}</strong>
-          <span>${tieneDatos(r) ? `Registro ${i + 1} de ${n}` : 'Registro nuevo'} · ${total} guardado${total === 1 ? '' : 's'}${resumenRegistro(r) ? ' · ' + esc(resumenRegistro(r)) : ''}</span>
+        <div class="cab-registros"><h3>Registros</h3><span class="contador">${tieneDatos(r) ? `Registro ${i + 1} de ${n}` : 'Registro nuevo'} · ${total} guardado${total === 1 ? '' : 's'}</span></div>
+        <div class="registro-actual">${bloques.length ? bloques.map(b => `
+          <div class="bloque">${b.lineas.map(l => `<strong>${esc(l)}</strong>`).join('')}<span>${esc(b.etiqueta)}</span></div>`).join('')
+          : '<div class="bloque"><strong class="vacio">Registro vacío</strong><span>Rellena cualquier certificado para empezar</span></div>'}
         </div>
         <div class="botonera">
           <button class="btn prim" data-registro="nuevo">${IC.nuevo}Nuevo</button>
           <button class="btn" data-registro="buscar">${IC.buscar}Buscar</button>
           <button class="btn" data-registro="anterior" title="Registro anterior">${IC.ant}Anterior</button>
           <button class="btn" data-registro="siguiente" title="Registro siguiente">Siguiente${IC.sig}</button>
+          <button class="btn peligro" data-registro="eliminar" title="Eliminar este registro">${IC.papelera}Eliminar</button>
         </div>
       </div>
     </div>
@@ -503,6 +535,7 @@ document.addEventListener('click', async e => {
     const a = t.dataset.registro;
     if (a === 'nuevo') crearRegistro();
     else if (a === 'buscar') abrirBusqueda();
+    else if (a === 'eliminar') eliminarRegistro();
     else moverRegistro(a === 'anterior' ? -1 : 1);
   }
   else if (t.dataset.google) {

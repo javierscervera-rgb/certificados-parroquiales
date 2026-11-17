@@ -252,7 +252,38 @@ const CERTIFICADOS = [
   { id: 'expediente', grupo: 'matrimonio', estado: 'pendiente', nombre: 'Expediente prematrimonial', titulo: 'Expediente prematrimonial', campos: [] },
   { id: 'alegato', grupo: 'matrimonio', estado: 'pendiente', nombre: 'Alegato V', titulo: 'Alegato V', campos: [] },
   { id: 'amonestaciones', grupo: 'matrimonio', estado: 'pendiente', nombre: 'Amonestaciones activas', titulo: 'Amonestaciones activas', campos: [] },
-  { id: 'exhorto', grupo: 'matrimonio', estado: 'pendiente', nombre: 'Exhorto amonestaciones (fuera)', titulo: 'Exhorto de amonestaciones', campos: [] },
+  {
+    id: 'exhorto', grupo: 'matrimonio', estado: 'listo',
+    nombre: 'Exhorto amonestaciones (fuera)', titulo: 'Exhorto de amonestaciones matrimoniales',
+    campos: [{ k: 'parroquia_exhorto', label: 'Parroquia a la que se envía', w: 12 },
+      C.novio_nombre, C.novio_apellidos,
+      { k: 'padre_novio', label: 'Padre del novio', w: 6, nueva: true }, { k: 'madre_novio', label: 'Madre del novio', w: 6 },
+      C.novia_nombre, C.novia_apellidos,
+      { k: 'padre_novia', label: 'Padre de la novia', w: 6, nueva: true }, { k: 'madre_novia', label: 'Madre de la novia', w: 6 },
+      { k: 'feligres', label: 'Feligrés de esa parroquia', tipo: 'select', opciones: ['Novio', 'Novia'], w: 3, nueva: true, sep: true },
+      { k: 'domicilio_feligres', label: 'Vive en', ph: 'calle, población', w: 6 },
+      { k: 'tiempo_feligres', label: 'Desde hace', ph: '5 años', w: 3 }],
+    documento: (d) => {
+      const esNovia = d.feligres === 'Novia';
+      const feligres = esNovia ? H.novia(d) : H.novio(d);
+      return {
+        titulo: 'EXHORTO DE AMONESTACIONES\nMATRIMONIALES', tituloNegrita: true, tituloTam: 16, tituloY: 120, tituloHueco: 66,
+        cuerpo: { x0: 56, x1: 545, tam: 11.5, interlinea: 22, justificar: false },
+        bloques: [
+          { linea: `Al Rev. Sr. Cura párroco de ${H.t(d.parroquia_exhorto, '______________________')}.`, subrayado: true },
+          { linea: 'Dígnese publicar que pretenden contraer matrimonio:', espacio: 2 },
+          { centro: `**${H.novio(d)}**, hijo de ${H.t(d.padre_novio)} y ${H.t(d.madre_novio)}`, espacio: 1.1 },
+          { centro: 'con', espacio: 1.1 },
+          { centro: `**${H.novia(d)}**, hija de ${H.t(d.padre_novia)} y ${H.t(d.madre_novia)}`, espacio: 1.1 },
+          { p: `${esNovia ? 'La contrayente es feligresa' : 'El contrayente es feligrés'} en la parroquia de su digno cargo ya que vive en ${H.t(d.domicilio_feligres)} desde hace ${H.t(d.tiempo_feligres, '______')}, lo que comunico a Ud. conforme a los cánones 1069 y 1070 del Código de Derecho Canónico.`, espacio: 2.2 },
+          { p: 'Hechas estas proclamas o amonestaciones, le ruego me informe de su resultado y de cuanto le conste sobre su libertad y aptitud para el matrimonio que pretenden contraer. Dios guarde a Vd. muchos años.', espacio: 2 },
+        ],
+        cierre: null, firmaEspacio: 3.2, cargoEspacio: 18, limiteFirma: 600,
+        pie: 'exhorto',
+        pieTexto: `CERTIFICO que se han publicado las amonestaciones de los contrayentes mencionados, y que no se ha manifestado impedimento canónico ni reparo alguno sobre ${feligres}, que es/ha sido ${esNovia ? 'feligresa' : 'feligrés'} de esta Parroquia.`
+      };
+    }
+  },
   { id: 'registro_civil', grupo: 'matrimonio', estado: 'pendiente', nombre: 'Certificado registro civil', titulo: 'Certificado registro civil', campos: [] },
   {
     id: 'comunicacion_matrimonio', grupo: 'matrimonio', estado: 'listo',
