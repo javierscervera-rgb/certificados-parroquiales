@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Certificados parroquiales</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --tinta: #1d2230;
+    --suave: #5d6475;
+    --fondo: #eceae5;
+    --papel: #fbfaf7;
+    --borde: #d8d4cc;
+    --azul: #1f2f5c;
+    --azul-2: #2c427e;
+    --oro: #c9a65a;
+    --rojo: #a8322d;
+    --cabecera: #23252b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { font-family: Inter, system-ui, sans-serif; color: var(--tinta); background: var(--fondo); font-size: 14px; }
+  button { font: inherit; cursor: pointer; }
+  input, select, textarea { font: inherit; color: inherit; }
+
+  header.barra {
+    background: var(--cabecera); color: #e9e4d8; padding: 18px 28px;
+    display: flex; align-items: center; gap: 16px; min-height: 84px;
+  }
+  header.barra h1 {
+    font-family: 'EB Garamond', Georgia, serif; font-weight: 500; letter-spacing: .06em;
+    text-transform: uppercase; font-size: clamp(20px, 2.6vw, 32px); margin: 0; flex: 1; line-height: 1.15;
+  }
+  .btn-cab { background: transparent; border: 1px solid #555a66; color: #e9e4d8; border-radius: 8px; padding: 8px 14px; }
+  .btn-cab:hover { background: #343844; }
+
+  main { padding: 22px 28px 40px; max-width: 1400px; margin: 0 auto; }
+
+  /* ---------- MENÚ ---------- */
+  .menu-top { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr); gap: 18px; margin-bottom: 26px; }
+  .tarjeta { background: var(--papel); border: 1px solid var(--borde); border-radius: 12px; padding: 14px 16px; }
+  .tarjeta h3 { margin: 0 0 10px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--suave); font-weight: 600; }
+  .fila { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .fila select { flex: 1; min-width: 180px; }
+  select, input[type=text], input[type=date], input[type=time], input[type=number], textarea {
+    border: 1px solid var(--borde); background: #fff; border-radius: 7px; padding: 8px 10px; width: 100%;
+  }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--azul-2); outline-offset: -1px; border-color: transparent; }
+  .btn { background: #fff; border: 1px solid var(--borde); border-radius: 8px; padding: 8px 14px; white-space: nowrap; }
+  .btn:hover { border-color: var(--suave); }
+  .btn.prim { background: var(--azul); color: #fff; border-color: var(--azul); }
+  .btn.prim:hover { background: var(--azul-2); }
+  .nota { font-size: 12px; color: var(--suave); margin-top: 8px; }
+  .busqueda input:disabled { background: #f3f1ec; }
+
+  .grupo { display: grid; grid-template-columns: 92px 1fr; gap: 18px; align-items: center; padding: 14px 0; border-top: 1px solid var(--borde); }
+  .grupo:first-of-type { border-top: 0; }
+  .icono { width: 76px; height: 76px; border-radius: 50%; background: var(--azul); display: grid; place-items: center; box-shadow: inset 0 0 0 3px #2d4486; }
+  .icono svg { width: 44px; height: 44px; }
+  .grupo .etq { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--suave); margin-top: 6px; text-align: center; }
+  .botones { display: flex; flex-wrap: wrap; gap: 8px; }
+  .cert {
+    width: 132px; min-height: 88px; border: 0; border-radius: 12px; padding: 10px;
+    background: linear-gradient(180deg, var(--azul-2), #10172e); color: #e8d6a8;
+    font-size: 12px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; line-height: 1.25;
+    position: relative; text-align: center;
+  }
+  .cert:hover { filter: brightness(1.15); }
+  .cert.pend { background: linear-gradient(180deg, #8a8f9c, #5f6472); color: #eef0f4; }
+  .cert .pill { position: absolute; top: 6px; right: 6px; font-size: 9px; background: rgba(255,255,255,.18); padding: 2px 6px; border-radius: 999px; letter-spacing: .05em; }
+  .leyenda { font-size: 12px; color: var(--suave); margin-top: 6px; display: flex; gap: 16px; }
+  .leyenda span::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; background: var(--azul-2); }
+  .leyenda span.p::before { background: #7a7f8c; }
+
+  /* ---------- FORMULARIO ---------- */
+  .form-layout { display: grid; grid-template-columns: minmax(300px, 400px) minmax(0, 1fr) 180px; gap: 20px; align-items: start; }
+  .campos { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  .campo label { display: block; font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--suave); margin-bottom: 4px; font-weight: 600; }
+  .campos .dos { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .sexo { display: flex; gap: 6px; }
+  .sexo button { flex: 1; border: 1px solid var(--borde); background: #fff; border-radius: 7px; padding: 8px; }
+  .sexo button.on { background: var(--azul); color: #fff; border-color: var(--azul); }
+  hr.sep { border: 0; border-top: 1px solid var(--borde); margin: 6px 0; }
+
+  .previa { background: #d9d6cf; border-radius: 12px; padding: 18px; display: grid; place-items: center; min-height: 400px; }
+  .previa svg.hoja { width: 100%; max-width: 620px; height: auto; box-shadow: 0 6px 24px rgba(0,0,0,.18); border-radius: 2px; }
+  .pendiente-aviso { background: var(--papel); border: 1px dashed var(--suave); border-radius: 12px; padding: 28px; max-width: 420px; text-align: center; color: var(--suave); line-height: 1.5; }
+  .pendiente-aviso strong { color: var(--tinta); display: block; font-size: 16px; margin-bottom: 6px; }
+
+  .acciones { display: flex; flex-direction: column; gap: 8px; position: sticky; top: 16px; }
+  .acc { display: flex; align-items: center; gap: 10px; text-align: left; background: #fff; border: 1px solid var(--borde); border-radius: 10px; padding: 12px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--tinta); }
+  .acc:hover:not(:disabled) { border-color: var(--azul-2); }
+  .acc svg { width: 22px; height: 22px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.6; }
+  .acc.prim { background: var(--azul); color: #fff; border-color: var(--azul); }
+  .acc:disabled { opacity: .45; cursor: not-allowed; }
+  .acc small { display: block; font-weight: 400; text-transform: none; letter-spacing: 0; opacity: .8; margin-top: 2px; }
+
+  /* ---------- CONFIGURACIÓN ---------- */
+  .config { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
+  .config .campos { gap: 12px; }
+  .imgbox { display: flex; gap: 12px; align-items: center; }
+  .imgbox .vista { width: 84px; height: 84px; border: 1px dashed var(--borde); border-radius: 8px; display: grid; place-items: center; background: #fff; overflow: hidden; font-size: 11px; color: var(--suave); text-align: center; }
+  .imgbox .vista img { max-width: 100%; max-height: 100%; }
+  .firmante { border: 1px solid var(--borde); border-radius: 10px; padding: 12px; display: grid; gap: 8px; background: #fff; margin-bottom: 10px; }
+  .firmante .fila input { flex: 1; min-width: 0; }
+
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--tinta); color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90vw; }
+  .toast.on { opacity: 1; }
+  .modal { position: fixed; inset: 0; background: rgba(20,22,28,.45); display: grid; place-items: center; padding: 20px; }
+  .modal .caja { background: var(--papel); border-radius: 14px; padding: 22px; max-width: 420px; width: 100%; }
+  .modal .caja p { margin: 0 0 16px; line-height: 1.5; }
+
+  @media (max-width: 1100px) {
+    .form-layout { grid-template-columns: minmax(280px, 1fr) 180px; }
+    .previa { grid-column: 1 / -1; order: 3; }
+  }
+  @media (max-width: 700px) {
+    main { padding: 16px; }
+    .menu-top { grid-template-columns: 1fr; }
+    .form-layout { grid-template-columns: 1fr; }
+    .acciones { position: static; flex-direction: row; flex-wrap: wrap; }
+    .acc { flex: 1 1 140px; }
+    .grupo { grid-template-columns: 1fr; }
+    .grupo > div:first-child { display: flex; align-items: center; gap: 12px; }
+    .grupo .etq { margin: 0; }
+    .icono { width: 56px; height: 56px; }
+    .icono svg { width: 32px; height: 32px; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="toast" id="toast"></div>
+<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script src="plantillas.js"></script>
+<script src="motor.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
