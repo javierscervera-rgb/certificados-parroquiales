@@ -75,22 +75,32 @@
   .leyenda span.p::before { background: #7a7f8c; }
 
   /* ---------- FORMULARIO ---------- */
-  .form-layout { display: grid; grid-template-columns: minmax(300px, 400px) minmax(0, 1fr) 180px; gap: 20px; align-items: start; }
+  .form-layout { display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 20px; align-items: start; }
+  .rejilla { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 10px 12px; align-items: end; }
+  .rejilla .campo { grid-column: span 6; min-width: 0; }
+  .rejilla hr.sep { grid-column: 1 / -1; }
   .campos { display: grid; grid-template-columns: 1fr; gap: 10px; }
-  .campo label { display: block; font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--suave); margin-bottom: 4px; font-weight: 600; }
-  .campos .dos { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .campo label { display: block; font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--suave); margin-bottom: 4px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sexo { display: flex; gap: 6px; }
-  .sexo button { flex: 1; border: 1px solid var(--borde); background: #fff; border-radius: 7px; padding: 8px; }
+  .sexo button { flex: 1; border: 1px solid var(--borde); background: #fff; border-radius: 7px; padding: 8px 4px; min-width: 0; }
   .sexo button.on { background: var(--azul); color: #fff; border-color: var(--azul); }
   hr.sep { border: 0; border-top: 1px solid var(--borde); margin: 6px 0; }
 
-  .previa { background: #d9d6cf; border-radius: 12px; padding: 18px; display: grid; place-items: center; min-height: 400px; }
-  .previa svg.hoja { width: 100%; max-width: 620px; height: auto; box-shadow: 0 6px 24px rgba(0,0,0,.18); border-radius: 2px; }
-  .pendiente-aviso { background: var(--papel); border: 1px dashed var(--suave); border-radius: 12px; padding: 28px; max-width: 420px; text-align: center; color: var(--suave); line-height: 1.5; }
-  .pendiente-aviso strong { color: var(--tinta); display: block; font-size: 16px; margin-bottom: 6px; }
+  .lateral { display: flex; flex-direction: column; gap: 8px; position: sticky; top: 16px; }
+  .miniatura { position: relative; padding: 10px; border: 1px solid var(--borde); border-radius: 10px; background: #d9d6cf; cursor: zoom-in; display: block; width: 100%; }
+  .miniatura:disabled { cursor: default; }
+  .miniatura svg.hoja { width: 100%; height: auto; display: block; box-shadow: 0 3px 12px rgba(0,0,0,.18); }
+  .miniatura .lupa { position: absolute; right: 16px; bottom: 16px; background: rgba(29,34,48,.85); color: #fff; font-size: 11px; padding: 4px 8px; border-radius: 999px; opacity: 0; transition: opacity .15s; }
+  .miniatura:hover .lupa { opacity: 1; }
+  .pendiente-aviso { background: var(--papel); border: 1px dashed var(--suave); border-radius: 8px; padding: 18px 12px; text-align: center; color: var(--suave); line-height: 1.45; font-size: 12px; }
+  .pendiente-aviso strong { color: var(--tinta); display: block; font-size: 13px; margin-bottom: 4px; }
 
-  .acciones { display: flex; flex-direction: column; gap: 8px; position: sticky; top: 16px; }
-  .acc { display: flex; align-items: center; gap: 10px; text-align: left; background: #fff; border: 1px solid var(--borde); border-radius: 10px; padding: 12px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--tinta); }
+  .modal.ampliada { background: rgba(20,22,28,.7); cursor: zoom-out; }
+  .hoja-grande { height: min(94vh, 141vw); aspect-ratio: 595 / 842; cursor: default; }
+  .hoja-grande svg { width: 100%; height: 100%; display: block; box-shadow: 0 10px 40px rgba(0,0,0,.4); }
+  .modal .cerrar { position: fixed; top: 16px; right: 16px; width: 40px; height: 40px; border-radius: 50%; border: 0; background: #fff; font-size: 18px; }
+
+  .acc { display: flex; align-items: center; gap: 10px; text-align: left; background: #fff; border: 1px solid var(--borde); border-radius: 10px; padding: 11px 12px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--tinta); }
   .acc:hover:not(:disabled) { border-color: var(--azul-2); }
   .acc svg { width: 22px; height: 22px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.6; }
   .acc.prim { background: var(--azul); color: #fff; border-color: var(--azul); }
@@ -103,8 +113,8 @@
   .imgbox { display: flex; gap: 12px; align-items: center; }
   .imgbox .vista { width: 84px; height: 84px; border: 1px dashed var(--borde); border-radius: 8px; display: grid; place-items: center; background: #fff; overflow: hidden; font-size: 11px; color: var(--suave); text-align: center; }
   .imgbox .vista img { max-width: 100%; max-height: 100%; }
-  .firmante { border: 1px solid var(--borde); border-radius: 10px; padding: 12px; display: grid; gap: 8px; background: #fff; margin-bottom: 10px; }
-  .firmante .fila input { flex: 1; min-width: 0; }
+  .firmante { display: grid; gap: 12px; }
+  .imgbox .vista.ancha { width: 180px; }
 
   .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--tinta); color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90vw; }
   .toast.on { opacity: 1; }
@@ -112,16 +122,17 @@
   .modal .caja { background: var(--papel); border-radius: 14px; padding: 22px; max-width: 420px; width: 100%; }
   .modal .caja p { margin: 0 0 16px; line-height: 1.5; }
 
-  @media (max-width: 1100px) {
-    .form-layout { grid-template-columns: minmax(280px, 1fr) 180px; }
-    .previa { grid-column: 1 / -1; order: 3; }
+  @media (max-width: 900px) {
+    .rejilla .campo { grid-column: span 6 !important; }
+    .rejilla .campo:has(textarea) { grid-column: 1 / -1 !important; }
   }
   @media (max-width: 700px) {
     main { padding: 16px; }
     .menu-top { grid-template-columns: 1fr; }
     .form-layout { grid-template-columns: 1fr; }
-    .acciones { position: static; flex-direction: row; flex-wrap: wrap; }
-    .acc { flex: 1 1 140px; }
+    .rejilla .campo { grid-column: 1 / -1 !important; }
+    .lateral { position: static; display: grid; grid-template-columns: 1fr 1fr; }
+    .miniatura { grid-row: span 3; }
     .grupo { grid-template-columns: 1fr; }
     .grupo > div:first-child { display: flex; align-items: center; gap: 12px; }
     .grupo .etq { margin: 0; }

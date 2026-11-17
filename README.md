@@ -15,14 +15,17 @@ Aplicación web para generar los certificados que se usan habitualmente en las p
 |---|---|---|
 | Catequesis | Certificado de catequesis | ✅ |
 | Bautismo | Certificado de bautismo | ✅ |
+| Bautismo | Partida de bautismo (con margen y notas marginales) | ✅ |
 | Bautismo | Autorización para bautizar fuera de la parroquia | ✅ |
-| Bautismo | Partida de bautismo | ⏳ falta modelo |
-| Bautismo | Autorización para ser padrino | ⏳ falta modelo |
-| Matrimonio | Bendición apostólica | ✅ |
-| Matrimonio | Cursillo prematrimonial, boda, matrimonio, comunicación de matrimonio | ⏳ falta modelo |
+| Bautismo | Certificado para ser padrino/madrina | ✅ |
+| Matrimonio | Cursillo prematrimonial | ✅ |
+| Matrimonio | Celebración del matrimonio (boda que se va a realizar) | ✅ |
+| Matrimonio | Certificado de matrimonio | ✅ |
+| Matrimonio | Bendición apostólica (boda, bodas de plata, bodas de oro) | ✅ |
+| Matrimonio | Comunicación de matrimonio (con tabla de trámites) | ✅ |
 | Matrimonio | Expediente, Alegato V, amonestaciones, exhorto, registro civil | ⏳ falta pantalla y modelo |
 | Confirmación | Certificado de confirmación | ✅ |
-| Confirmación | Comunicación de confirmación | ⏳ falta modelo |
+| Confirmación | Comunicación de confirmación | ✅ |
 
 ## Estructura
 

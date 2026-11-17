@@ -11,6 +11,8 @@ const CONFIG_DEFECTO = {
   cp: '28000',
   provincia: 'Madrid',
   web: 'www.parroquiadeejemplo.es',
+  diocesis: 'Madrid',
+  nombreCorto: '',
   papa: 'León XIV',
   color: '#a8322d',
   logo: '', sello: '',
@@ -82,7 +84,8 @@ const IC = {
 function render() {
   const app = $('#app');
   if (estado.vista === 'menu') app.innerHTML = vistaMenu();
-  else if (estado.vista === 'config') app.innerHTML = vistaConfig();
+  else if (estado.vista === 'parroquia') app.innerHTML = vistaParroquia();
+  else if (estado.vista === 'firmantes') app.innerHTML = vistaFirmantes();
   else app.innerHTML = vistaFormulario();
   window.scrollTo(0, 0);
   if (estado.vista === 'form') actualizarPrevia();
@@ -99,12 +102,12 @@ function vistaMenu() {
   }).join('');
   const hayRegistro = Object.values(estado.registro).some(v => v && String(v).trim());
   return `
-  <header class="barra"><h1>Certificados</h1><button class="btn-cab" data-ir="config">⚙ Datos de la parroquia</button></header>
+  <header class="barra"><h1>Certificados</h1><button class="btn-cab" data-ir="firmantes">✒ Firmantes</button><button class="btn-cab" data-ir="parroquia">⚙ Datos de la parroquia</button></header>
   <main>
     <div class="menu-top">
       <div class="tarjeta">
         <h3>Firma</h3>
-        <div class="fila"><select id="selFirma">${opcFirmas}</select><button class="btn" data-ir="config">Firmas</button></div>
+        <div class="fila"><select id="selFirma">${opcFirmas}</select><button class="btn" data-ir="firmantes">Firmantes</button></div>
         <div class="fila" style="margin-top:12px">
           <button class="btn prim" id="nuevoRegistro">Nuevo registro</button>
           <span class="nota" style="margin:0">${hayRegistro ? 'Hay datos de un registro en curso: se rellenan solos en cada certificado.' : 'Empieza un registro nuevo para cada persona o pareja.'}</span>
@@ -136,38 +139,37 @@ function campoHTML(c) {
     const s = v || 'M';
     ctl = `<div class="sexo" data-sexo><button type="button" data-v="M" class="${s === 'M' ? 'on' : ''}">Varón</button><button type="button" data-v="F" class="${s === 'F' ? 'on' : ''}">Mujer</button></div>`;
   } else if (c.tipo === 'textarea') ctl = `<textarea id="${id}" data-k="${c.k}" rows="3">${esc(v)}</textarea>`;
-  else if (c.tipo === 'select') ctl = `<select id="${id}" data-k="${c.k}"><option value=""></option>${c.opciones.map(o => `<option ${o === v ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+  else if (c.tipo === 'select') ctl = `<select id="${id}" data-k="${c.k}">${c.opciones.map((o, i) => `<option ${o === v || (!v && i === 0) ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
   else ctl = `<input id="${id}" data-k="${c.k}" type="${c.tipo || 'text'}" value="${esc(v)}" placeholder="${esc(c.ph || '')}" autocomplete="off">`;
-  return `<div class="campo"><label for="${id}">${esc(c.label)}</label>${ctl}</div>`;
+  const estilo = `grid-column:${c.nueva ? '1 / ' : ''}span ${c.w || 6}`;
+  return `${c.sep ? '<hr class="sep">' : ''}<div class="campo" style="${estilo}"><label for="${id}">${esc(c.label)}</label>${ctl}</div>`;
 }
 
 function vistaFormulario() {
   const cert = CERTIFICADOS.find(c => c.id === estado.certId);
   const listo = cert.estado === 'listo';
   const cfg = estado.config;
-  const opcFirmas = cfg.firmas.map((f, i) => `<option value="${i}" ${i == cfg.firmaActual ? 'selected' : ''}>${esc(f.nombre)}</option>`).join('');
-  // agrupa los campos cortos (libro/folio/nº) de tres en tres
-  let html = '', cortos = [];
-  const vaciar = () => { if (cortos.length) { html += `<div class="dos">${cortos.join('')}</div>`; cortos = []; } };
-  cert.campos.forEach(c => { if (c.corto) { cortos.push(campoHTML(c)); if (cortos.length === 3) vaciar(); } else { vaciar(); html += campoHTML(c); } });
-  vaciar();
-  if (!cert.campos.length) html = '<p class="nota">Esta pantalla todavía no está hecha. Cuando me pases la captura y un PDF de ejemplo, la monto.</p>';
+  const opcFirmas = cfg.firmas.map((f, i) => `<option value="${i}" ${i == cfg.firmaActual ? 'selected' : ''}>${esc(f.nombre)} — ${esc(f.cargo)}</option>`).join('');
+  // valores por defecto de los desplegables
+  cert.campos.forEach(c => { if (c.tipo === 'select' && !estado.registro[c.k]) estado.registro[c.k] = c.opciones[0]; });
+  const campos = cert.campos.length ? cert.campos.map(campoHTML).join('')
+    : '<p class="nota" style="grid-column:1/-1">Esta pantalla todavía no está hecha. Cuando me pases la captura y un PDF de ejemplo, la monto.</p>';
 
   return `
   <header class="barra"><h1>${esc(cert.titulo)}</h1></header>
   <main>
     <div class="form-layout">
       <div class="tarjeta">
-        <div class="campos">
-          <div class="campo"><label for="selFirma">Firma</label><select id="selFirma">${opcFirmas}</select></div>
-          <div class="campo"><label for="fechaDoc">Fecha del documento</label><input type="date" id="fechaDoc" value="${estado.fechaDocumento}"></div>
+        <div class="rejilla">
+          <div class="campo" style="grid-column:span 6"><label for="selFirma">Firma</label><select id="selFirma">${opcFirmas}</select></div>
+          <div class="campo" style="grid-column:span 3"><label for="fechaDoc">Fecha del documento</label><input type="date" id="fechaDoc" value="${estado.fechaDocumento}"></div>
           <hr class="sep">
-          ${html}
+          ${campos}
         </div>
       </div>
-      <div class="previa" id="previa"></div>
-      <div class="acciones">
+      <div class="lateral">
         <button class="acc" data-ir="menu">${IC.menu}Menú principal</button>
+        <button class="miniatura" id="previa" title="Pulsa para ampliar" ${listo ? '' : 'disabled'}></button>
         <button class="acc prim" data-pdf="1" ${listo ? '' : 'disabled'}>${IC.pluma}<span>PDF con firma<small>Con sello y firma escaneada</small></span></button>
         <button class="acc" data-pdf="0" ${listo ? '' : 'disabled'}>${IC.pdf}<span>PDF sin firma<small>Para firmar a mano</small></span></button>
         <button class="acc" disabled title="Llegará con la conexión a Google">${IC.mail}<span>Enviar por mail<small>Próximamente</small></span></button>
@@ -176,19 +178,29 @@ function vistaFormulario() {
   </main>`;
 }
 
-let _previaPend = null;
+let _previaPend = null, _ultimoSVG = '';
 function actualizarPrevia() {
   clearTimeout(_previaPend);
   _previaPend = setTimeout(async () => {
     const caja = $('#previa'); if (!caja) return;
     const cert = CERTIFICADOS.find(c => c.id === estado.certId);
     if (cert.estado !== 'listo') {
-      caja.innerHTML = `<div class="pendiente-aviso"><strong>Falta el modelo de este certificado</strong>Las pantallas ya recogen los datos. Pásame un PDF de ejemplo generado por FileMaker y dejo el texto igual que el original.</div>`;
+      caja.innerHTML = `<div class="pendiente-aviso"><strong>Falta el modelo</strong>Pásame un PDF de ejemplo y lo dejo igual que el original.</div>`;
       return;
     }
     const ops = await Motor.maquetar(cert, estado.registro, ctx(), true);
-    caja.innerHTML = Motor.aSVG(ops);
+    _ultimoSVG = Motor.aSVG(ops);
+    caja.innerHTML = _ultimoSVG + '<span class="lupa">⤢ Ampliar</span>';
+    const grande = $('#ampliada .hoja-grande'); if (grande) grande.innerHTML = _ultimoSVG;
   }, 60);
+}
+function abrirAmpliada() {
+  if (!_ultimoSVG) return;
+  const m = document.createElement('div');
+  m.className = 'modal ampliada'; m.id = 'ampliada';
+  m.innerHTML = `<div class="hoja-grande">${_ultimoSVG}</div><button class="cerrar" data-cerrar aria-label="Cerrar">✕</button>`;
+  m.addEventListener('click', e => { if (e.target === m || e.target.closest('[data-cerrar]')) m.remove(); });
+  document.body.appendChild(m);
 }
 function ctx() { return { config: estado.config, firmante: firmante(), fechaDocumento: estado.fechaDocumento }; }
 
@@ -210,35 +222,50 @@ async function generarPDF(conFirma) {
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
-/* ---------------- CONFIGURACIÓN ---------------- */
-function vistaConfig() {
+/* ---------------- DATOS DE LA PARROQUIA ---------------- */
+function vistaParroquia() {
   const c = estado.config;
-  const inp = (k, label, ph = '') => `<div class="campo"><label for="cfg_${k}">${label}</label><input type="text" id="cfg_${k}" data-cfg="${k}" value="${esc(c[k])}" placeholder="${esc(ph)}"></div>`;
+  const inp = (k, label, w = 12, ph = '') => `<div class="campo" style="grid-column:span ${w}"><label for="cfg_${k}">${label}</label><input type="text" id="cfg_${k}" data-cfg="${k}" value="${esc(c[k])}" placeholder="${esc(ph)}"></div>`;
   const img = (k, label, ayuda) => `<div class="campo"><label>${label}</label><div class="imgbox"><div class="vista">${c[k] ? `<img src="${c[k]}" alt="">` : 'sin imagen'}</div><div><input type="file" accept="image/*" data-img="${k}"><div class="nota">${ayuda}</div>${c[k] ? `<button class="btn" data-quitar="${k}" style="margin-top:6px">Quitar</button>` : ''}</div></div></div>`;
-  const firmas = c.firmas.map((f, i) => `
-    <div class="firmante">
-      <div class="fila"><input type="text" data-f="${i}" data-fk="nombre" value="${esc(f.nombre)}" placeholder="Nombre y apellidos"><input type="text" data-f="${i}" data-fk="cargo" value="${esc(f.cargo)}" placeholder="Cargo (Párroco, secretaria…)" style="max-width:180px"></div>
-      <div class="imgbox"><div class="vista">${f.firma ? `<img src="${f.firma}" alt="">` : 'sin firma'}</div><div><input type="file" accept="image/*" data-firma="${i}"><div class="nota">Firma escaneada, mejor en PNG con fondo transparente.</div>
-      <div class="fila" style="margin-top:6px">${f.firma ? `<button class="btn" data-quitarfirma="${i}">Quitar firma</button>` : ''}${c.firmas.length > 1 ? `<button class="btn" data-borrarf="${i}">Eliminar firmante</button>` : ''}</div></div></div>
-    </div>`).join('');
   return `
   <header class="barra"><h1>Datos de la parroquia</h1><button class="btn-cab" data-ir="menu">← Volver al menú</button></header>
   <main>
     <div class="config">
-      <div class="tarjeta"><h3>Membrete</h3><div class="campos">
-        ${inp('nombre', 'Nombre de la parroquia')}${inp('direccion', 'Dirección')}${inp('localidad', 'Localidad')}
-        <div class="dos" style="grid-template-columns:1fr 2fr">${inp('cp', 'C.P.')}${inp('provincia', 'Provincia')}</div>
-        ${inp('web', 'Web')}
-        <div class="campo"><label for="cfg_color">Color del membrete</label><input type="color" id="cfg_color" data-cfg="color" value="${esc(c.color)}" style="width:80px;height:38px;padding:2px"></div>
-        ${inp('papa', 'Papa (para la Bendición Apostólica)')}
-      </div></div>
+      <div class="tarjeta"><h3>Membrete</h3><div class="rejilla">
+        ${inp('nombre', 'Nombre de la parroquia', 8)}${inp('nombreCorto', 'Nombre abreviado', 4, 'S. S. Mártir')}
+        ${inp('direccion', 'Dirección', 8)}${inp('cp', 'C.P.', 4)}
+        ${inp('localidad', 'Localidad', 6)}${inp('provincia', 'Provincia', 6)}
+        ${inp('diocesis', 'Diócesis', 6)}${inp('web', 'Web', 6)}
+        <div class="campo" style="grid-column:span 4"><label for="cfg_color">Color del membrete</label><input type="color" id="cfg_color" data-cfg="color" value="${esc(c.color)}" style="width:80px;height:38px;padding:2px"></div>
+        ${inp('papa', 'Papa (para la Bendición Apostólica)', 8)}
+      </div>
+      <p class="nota">El nombre abreviado sale en el margen de la partida de bautismo.</p></div>
       <div class="tarjeta"><h3>Imágenes</h3><div class="campos">
         ${img('logo', 'Logo (arriba a la izquierda)', 'PNG o JPG.')}
         ${img('sello', 'Sello (junto a la firma)', 'Solo aparece en «PDF con firma».')}
       </div></div>
-      <div class="tarjeta"><h3>Firmantes</h3>${firmas}<button class="btn" id="anadirFirma">+ Añadir firmante</button></div>
     </div>
     <p class="nota" style="margin-top:16px">En este prototipo los datos se guardan solo en este navegador. En la versión final se guardarán en el Google Drive de la parroquia.</p>
+  </main>`;
+}
+
+/* ---------------- FIRMANTES ---------------- */
+function vistaFirmantes() {
+  const c = estado.config;
+  const firmas = c.firmas.map((f, i) => `
+    <div class="tarjeta firmante">
+      <div class="rejilla">
+        <div class="campo" style="grid-column:span 8"><label>Nombre y apellidos</label><input type="text" data-f="${i}" data-fk="nombre" value="${esc(f.nombre)}"></div>
+        <div class="campo" style="grid-column:span 4"><label>Cargo</label><input type="text" data-f="${i}" data-fk="cargo" value="${esc(f.cargo)}" placeholder="Párroco, secretaria…"></div>
+      </div>
+      <div class="imgbox"><div class="vista ancha">${f.firma ? `<img src="${f.firma}" alt="">` : 'sin firma'}</div><div><input type="file" accept="image/*" data-firma="${i}"><div class="nota">Firma escaneada, mejor en PNG con fondo transparente.</div>
+      <div class="fila" style="margin-top:6px">${f.firma ? `<button class="btn" data-quitarfirma="${i}">Quitar firma</button>` : ''}${c.firmas.length > 1 ? `<button class="btn" data-borrarf="${i}">Eliminar firmante</button>` : ''}</div></div></div>
+    </div>`).join('');
+  return `
+  <header class="barra"><h1>Firmantes</h1><button class="btn-cab" data-ir="menu">← Volver al menú</button></header>
+  <main>
+    <div class="config">${firmas}</div>
+    <button class="btn prim" id="anadirFirma" style="margin-top:16px">+ Añadir firmante</button>
   </main>`;
 }
 
@@ -265,6 +292,7 @@ function leerImagen(file) {
 document.addEventListener('click', async e => {
   const t = e.target.closest('button'); if (!t) return;
   if (t.dataset.ir) { estado.vista = t.dataset.ir; render(); }
+  else if (t.id === 'previa') abrirAmpliada();
   else if (t.dataset.abrir) { estado.certId = t.dataset.abrir; estado.vista = 'form'; render(); }
   else if (t.dataset.pdf) {
     t.disabled = true;
@@ -322,3 +350,5 @@ document.addEventListener('change', async e => {
     window.claude.use('downloads').then(d => { estado.descargas = d; }).catch(() => {});
   }
 })();
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { const m = $('#ampliada'); if (m) m.remove(); } });

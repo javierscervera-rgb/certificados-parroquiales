@@ -3,9 +3,11 @@
    Cada certificado define:
      - id, nombre (botón del menú), titulo (cabecera de la pantalla), grupo
      - estado: 'listo' | 'pendiente'
-     - campos: los datos que pide la pantalla (las claves se comparten
-       entre certificados: si escribes el nombre en uno, aparece en otro)
+     - campos: los datos que pide la pantalla. Las claves se comparten
+       entre certificados: lo que escribes en uno aparece en los demás.
+       w = ancho en la rejilla (de 12 columnas); nueva = empieza fila nueva
      - documento(d, ctx): devuelve el contenido del certificado
+       (texto entre **asteriscos** = negrita)
    ============================================================ */
 
 const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto',
@@ -34,6 +36,8 @@ const H = {
     const s = [d[n], d[a]].filter(x => x && x.trim()).join(' ').trim();
     return s || '______________________';
   },
+  novio(d) { return H.nombre(d, 'novio_nombre', 'novio_apellidos'); },
+  novia(d) { return H.nombre(d, 'novia_nombre', 'novia_apellidos'); },
   // nacido / nacida, hijo / hija...
   g(d, masc, fem) { return d.sexo === 'F' ? fem : masc; },
   anios(n) {
@@ -45,21 +49,28 @@ const H = {
 };
 
 const CIERRE_CERTIFICO = 'y para que así conste, lo firmo con fecha ut supra';
+const A_QUIEN = 'A QUIEN LE PUEDA INTERESAR';
 
-const CAMPOS = {
-  nombre: { k: 'nombre', label: 'Nombre' },
-  apellidos: { k: 'apellidos', label: 'Apellidos' },
-  sexo: { k: 'sexo', label: 'Sexo', tipo: 'sexo' },
-  f_nac: { k: 'f_nac', label: 'F. nacimiento', tipo: 'date' },
-  f_bau: { k: 'f_bau', label: 'F. bautismo', tipo: 'date' },
-  libro_bau: { k: 'libro_bau', label: 'Libro baut.', corto: true },
-  folio_bau: { k: 'folio_bau', label: 'Folio baut.', corto: true },
-  num_bau: { k: 'num_bau', label: 'Nº baut.', corto: true },
-  novio_nombre: { k: 'novio_nombre', label: 'Nombre novio' },
-  novio_apellidos: { k: 'novio_apellidos', label: 'Apellidos novio' },
-  novia_nombre: { k: 'novia_nombre', label: 'Nombre novia' },
-  novia_apellidos: { k: 'novia_apellidos', label: 'Apellidos novia' },
+/* Campos que se repiten en varias pantallas */
+const C = {
+  nombre: { k: 'nombre', label: 'Nombre', w: 4 },
+  apellidos: { k: 'apellidos', label: 'Apellidos', w: 5 },
+  sexo: { k: 'sexo', label: 'Sexo', tipo: 'sexo', w: 3 },
+  dni: { k: 'dni', label: 'DNI', w: 3 },
+  f_nac: { k: 'f_nac', label: 'F. nacimiento', tipo: 'date', w: 3 },
+  f_bau: { k: 'f_bau', label: 'F. bautismo', tipo: 'date', w: 3 },
+  libro_bau: { k: 'libro_bau', label: 'Libro baut.', w: 2 },
+  folio_bau: { k: 'folio_bau', label: 'Folio baut.', w: 2 },
+  num_bau: { k: 'num_bau', label: 'Nº baut.', w: 2 },
+  f_conf: { k: 'f_conf', label: 'F. confirmación', tipo: 'date', w: 3 },
+  ministro_conf: { k: 'ministro_conf', label: 'Ministro de la confirmación', ph: 'Sr. D. …, Obispo Auxiliar de …', w: 9 },
+  novio_nombre: { k: 'novio_nombre', label: 'Nombre novio', w: 4, nueva: true },
+  novio_apellidos: { k: 'novio_apellidos', label: 'Apellidos novio', w: 5 },
+  novia_nombre: { k: 'novia_nombre', label: 'Nombre novia', w: 4, nueva: true },
+  novia_apellidos: { k: 'novia_apellidos', label: 'Apellidos novia', w: 5 },
+  f_mat: { k: 'f_mat', label: 'Fecha matrimonio', tipo: 'date', w: 3, nueva: true },
 };
+const con = (campo, cambios) => Object.assign({}, campo, cambios);
 
 const CERTIFICADOS = [
   /* ---------------- CATEQUESIS ---------------- */
@@ -67,8 +78,7 @@ const CERTIFICADOS = [
     id: 'catequesis', grupo: 'catequesis', estado: 'listo',
     nombre: 'Certificado de catequesis',
     titulo: 'Certificado de haber cursado catequesis aquí',
-    campos: [CAMPOS.nombre, CAMPOS.apellidos,
-      { k: 'anios_cateq', label: 'Número años de catequesis', tipo: 'number', corto: true }],
+    campos: [C.nombre, C.apellidos, { k: 'anios_cateq', label: 'Años de catequesis', tipo: 'number', w: 3 }],
     documento: (d) => ({
       titulo: 'CERTIFICADO HABER CURSADO\nCATEQUESIS EN LA PARROQUIA',
       bloques: [
@@ -83,8 +93,7 @@ const CERTIFICADOS = [
     id: 'bautismo', grupo: 'bautismo', estado: 'listo',
     nombre: 'Certificado de bautismo',
     titulo: 'Certificado de bautismo',
-    campos: [CAMPOS.nombre, CAMPOS.apellidos, CAMPOS.sexo, CAMPOS.f_nac, CAMPOS.f_bau,
-      CAMPOS.libro_bau, CAMPOS.folio_bau, CAMPOS.num_bau],
+    campos: [C.nombre, C.apellidos, C.sexo, C.f_nac, C.f_bau, C.libro_bau, C.folio_bau, C.num_bau],
     documento: (d) => ({
       titulo: 'CERTIFICADO DE BAUTISMO',
       bloques: [
@@ -94,85 +103,151 @@ const CERTIFICADOS = [
     })
   },
   {
-    id: 'partida_bautismo', grupo: 'bautismo', estado: 'pendiente',
+    id: 'partida_bautismo', grupo: 'bautismo', estado: 'listo',
     nombre: 'Partida de bautismo', titulo: 'Partida de bautismo',
-    campos: [CAMPOS.nombre, CAMPOS.apellidos, CAMPOS.sexo, CAMPOS.f_bau, CAMPOS.libro_bau,
-      CAMPOS.folio_bau, CAMPOS.num_bau, CAMPOS.f_nac,
-      { k: 'lugar_nac', label: 'Lugar de nacimiento' }, { k: 'provincia_nac', label: 'Provincia' },
-      { k: 'diocesis_nac', label: 'Diócesis' },
-      { k: 'padre', label: 'Nombre completo padre' }, { k: 'padre_lugar', label: 'Lugar nac. padre' },
-      { k: 'madre', label: 'Nombre completo madre' }, { k: 'madre_lugar', label: 'Lugar nac. madre' },
-      { k: 'abuelo_pat', label: 'Abuelo paterno' }, { k: 'abuelo_pat_lugar', label: 'Lugar nac.' },
-      { k: 'abuela_pat', label: 'Abuela paterna' }, { k: 'abuela_pat_lugar', label: 'Lugar nac.' },
-      { k: 'abuelo_mat', label: 'Abuelo materno' }, { k: 'abuelo_mat_lugar', label: 'Lugar nac.' },
-      { k: 'abuela_mat', label: 'Abuela materna' }, { k: 'abuela_mat_lugar', label: 'Lugar nac.' },
-      { k: 'padrinos', label: 'Padrinos' }, { k: 'ministro_bau', label: 'Ministro del bautismo' },
-      { k: 'notas_marginales', label: 'Notas marginales', tipo: 'textarea' }]
+    campos: [C.nombre, C.apellidos, C.sexo,
+      C.f_bau, C.libro_bau, C.folio_bau, C.num_bau, C.f_nac,
+      { k: 'lugar_nac', label: 'Lugar de nacimiento', w: 4, nueva: true }, { k: 'provincia_nac', label: 'Provincia', w: 4 },
+      { k: 'diocesis_nac', label: 'Diócesis', w: 4 },
+      { k: 'padre', label: 'Nombre completo padre', w: 8, nueva: true, sep: true }, { k: 'padre_lugar', label: 'Lugar de nacimiento', w: 4 },
+      { k: 'madre', label: 'Nombre completo madre', w: 8 }, { k: 'madre_lugar', label: 'Lugar de nacimiento', w: 4 },
+      { k: 'abuelo_pat', label: 'Abuelo paterno', w: 8, sep: true }, { k: 'abuelo_pat_lugar', label: 'Lugar de nacimiento', w: 4 },
+      { k: 'abuela_pat', label: 'Abuela paterna', w: 8 }, { k: 'abuela_pat_lugar', label: 'Lugar de nacimiento', w: 4 },
+      { k: 'abuelo_mat', label: 'Abuelo materno', w: 8 }, { k: 'abuelo_mat_lugar', label: 'Lugar de nacimiento', w: 4 },
+      { k: 'abuela_mat', label: 'Abuela materna', w: 8 }, { k: 'abuela_mat_lugar', label: 'Lugar de nacimiento', w: 4 },
+      { k: 'padrinos', label: 'Padrinos', w: 12, sep: true }, { k: 'ministro_bau', label: 'Ministro del bautismo', w: 12 },
+      { k: 'notas_marginales', label: 'Notas marginales', tipo: 'textarea', w: 12, sep: true }],
+    documento: (d, ctx) => {
+      const f = ctx.firmante || {}, cfg = ctx.config;
+      const nat = (lugar) => `natural de ${H.t(lugar)}`;
+      return {
+        titulo: 'CERTIFICACIÓN DE PARTIDA DE BAUTISMO',
+        formato: 'partida',
+        margen: {
+          parroquia: ['PARROQUIA DE', (cfg.nombreCorto || cfg.nombre || '').replace(/^parroquia( de)?\s+/i, '').toUpperCase()],
+          lugar: [(cfg.localidad || '').toUpperCase(), 'DIOC. ' + (cfg.diocesis || '').toUpperCase(), 'PROV. ' + (cfg.provincia || '').toUpperCase()],
+          libro: [`LIBRO ${H.t(d.libro_bau, '___')}`, `FOL. ${H.t(d.folio_bau, '___')}`, `Nº ${H.t(d.num_bau, '___')}`],
+          notas: d.notas_marginales || ''
+        },
+        bloques: [
+          { p: `REV. D. ${H.t(f.nombre)}, ${H.t(f.cargo, '')} de ${H.t(cfg.nombre)}, diócesis de ${H.t(cfg.diocesis)}` },
+          { p: `**CERTIFICA:** Que según consta del acta reseñada al margen, correspondiente al libro de bautismos ${H.nombre(d)}, fue ${H.g(d, 'bautizado', 'bautizada')} el día ${H.fecha(d.f_bau)}.` },
+          { p: `Nació el día ${H.fecha(d.f_nac)}, siendo natural de ${H.t(d.lugar_nac)}, diócesis de ${H.t(d.diocesis_nac)}, provincia de ${H.t(d.provincia_nac)}.` },
+          { p: `PADRES: D. ${H.t(d.padre)}, ${nat(d.padre_lugar)} y Dña. ${H.t(d.madre)}, ${nat(d.madre_lugar)}.` },
+          { p: `ABUELOS PATERNOS: D. ${H.t(d.abuelo_pat)}, ${nat(d.abuelo_pat_lugar)} y Dña. ${H.t(d.abuela_pat)}, ${nat(d.abuela_pat_lugar)}.` },
+          { p: `ABUELOS MATERNOS: D. ${H.t(d.abuelo_mat)}, ${nat(d.abuelo_mat_lugar)} y Dña. ${H.t(d.abuela_mat)}, ${nat(d.abuela_mat_lugar)}.` },
+          { p: `PADRINOS: ${H.t(d.padrinos)}.` },
+          { p: `MINISTRO: ${H.t(d.ministro_bau)}.`, espacio: 1 },
+        ],
+        cierre: null, firmaEspacio: 8
+      };
+    }
   },
   {
     id: 'autorizacion_bautismo', grupo: 'bautismo', estado: 'listo',
     nombre: 'Autorización para bautizar',
     titulo: 'Autorización para el bautismo fuera de la parroquia',
     campos: [
-      { k: 'nombre', label: 'Nombre del niño' }, { k: 'apellidos', label: 'Apellidos del niño' },
-      CAMPOS.sexo, CAMPOS.f_nac,
-      { k: 'padre', label: 'Nombre completo del padre' },
-      { k: 'madre', label: 'Nombre completo de la madre' },
-      { k: 'parroquia_destino', label: 'Parroquia de bautismo' }],
+      con(C.nombre, { label: 'Nombre del niño/a' }), con(C.apellidos, { label: 'Apellidos del niño/a' }), C.sexo,
+      con(C.f_nac, { nueva: true }), { k: 'parroquia_destino', label: 'Parroquia de bautismo', w: 9 },
+      { k: 'padre', label: 'Nombre completo del padre', w: 6, nueva: true },
+      { k: 'madre', label: 'Nombre completo de la madre', w: 6 }],
     documento: (d) => ({
       titulo: 'AUTORIZACIÓN DE BAUTISMO',
       bloques: [
-        { linea: `Al Rev. Cura párroco de ${H.t(d.parroquia_destino, '______________________')}`, sinEspacio: true },
-        { p: `Nada obsta para que ${H.nombre(d)} ${H.g(d, 'nacido', 'nacida')} el ${H.fecha(d.f_nac)}, ${H.g(d, 'hijo', 'hija')} de ${H.t(d.padre)} y de ${H.t(d.madre)} sea ${H.g(d, 'bautizado', 'bautizada')} en la parroquia de su digno cargo.` },
+        { linea: `Al Rev. Cura párroco de ${H.t(d.parroquia_destino, '______________________')}` },
+        { p: `Nada obsta para que ${H.nombre(d)} ${H.g(d, 'nacido', 'nacida')} el ${H.fecha(d.f_nac)}, ${H.g(d, 'hijo', 'hija')} de ${H.t(d.padre)} y de ${H.t(d.madre)} sea ${H.g(d, 'bautizado', 'bautizada')} en la parroquia de su digno cargo.`, espacio: 1 },
         { p: 'Aprovecho para saludarle afectuosamente encomendando su parroquia y su persona.' }
       ],
       cierre: CIERRE_CERTIFICO
     })
   },
   {
-    id: 'padrino', grupo: 'bautismo', estado: 'pendiente',
+    id: 'padrino', grupo: 'bautismo', estado: 'listo',
     nombre: 'Autorización para ser padrino', titulo: 'Autorización para ser padrino de bautismo',
-    campos: [CAMPOS.nombre, CAMPOS.apellidos, { k: 'dni', label: 'DNI' }]
+    campos: [C.nombre, C.apellidos, C.sexo, con(C.dni, { nueva: true })],
+    documento: (d) => ({
+      titulo: `CERTIFICADO\nPARA SER ${H.g(d, 'PADRINO', 'MADRINA')} DE BAUTISMO`,
+      bloques: [
+        { linea: A_QUIEN },
+        { p: `Certifico que ${H.nombre(d)} ha realizado la preparación suficiente y conoce las obligaciones que se derivan de su condición de ${H.g(d, 'padrino', 'madrina')} de bautismo.`, espacio: 1 },
+        { p: 'Estimamos por el conocimiento que tenemos que está en condiciones y tiene intención de cumplir estas obligaciones.', espacio: 1 },
+      ],
+      cierre: CIERRE_CERTIFICO, cierreEspacio: 2
+    })
   },
 
   /* ---------------- MATRIMONIO ---------------- */
   {
-    id: 'cursillo', grupo: 'matrimonio', estado: 'pendiente',
+    id: 'cursillo', grupo: 'matrimonio', estado: 'listo',
     nombre: 'Certificado cursillo prematrimonial', titulo: 'Certificado cursillo prematrimonial',
-    campos: [CAMPOS.novio_nombre, CAMPOS.novio_apellidos, CAMPOS.novia_nombre, CAMPOS.novia_apellidos,
-      { k: 'fecha_cursillo', label: 'Fecha cursillo', ph: '1 a 3 de enero de 2020' }]
+    campos: [C.novio_nombre, C.novio_apellidos, C.novia_nombre, C.novia_apellidos,
+      { k: 'fecha_cursillo', label: 'Fechas del cursillo', ph: '1 a 3 de enero de 2020', w: 6, nueva: true }],
+    documento: (d) => ({
+      titulo: 'CERTIFICADO\nde asistencia al Cursillo Prematrimonial',
+      bloques: [
+        { linea: A_QUIEN },
+        { p: `Certifico que ${H.novio(d)} y ${H.novia(d)} están participando en el cursillo prematrimonial que se imparte en esta Parroquia entre los días ${H.t(d.fecha_cursillo)}.`, espacio: 1 },
+      ],
+      cierre: CIERRE_CERTIFICO, cierreEspacio: 3
+    })
   },
   {
-    id: 'boda', grupo: 'matrimonio', estado: 'pendiente',
+    id: 'boda', grupo: 'matrimonio', estado: 'listo',
     nombre: 'Certificado de boda', titulo: 'Certificado de boda que se va a realizar aquí',
-    campos: [CAMPOS.novio_nombre, CAMPOS.novio_apellidos, CAMPOS.novia_nombre, CAMPOS.novia_apellidos,
-      { k: 'f_mat', label: 'Fecha boda', tipo: 'date' }, { k: 'hora_boda', label: 'Hora de la boda', tipo: 'time', corto: true }]
+    campos: [C.novio_nombre, C.novio_apellidos, C.novia_nombre, C.novia_apellidos,
+      con(C.f_mat, { label: 'Fecha boda' }), { k: 'hora_boda', label: 'Hora de la boda', tipo: 'time', w: 2 }],
+    documento: (d) => ({
+      titulo: 'CERTIFICADO\nde la celebración del\nSacramento del Matrimonio',
+      bloques: [
+        { linea: A_QUIEN },
+        { p: `Certifico que el próximo día ${H.fechaLarga(d.f_mat)} a las ${H.t(d.hora_boda, '____')} horas van a contraer matrimonio en esta parroquia`, espacio: 1, justificar: false },
+        { linea: `${H.novio(d)} con`, espacio: 1 },
+        { linea: `${H.novia(d)}.`, espacio: 1 },
+      ],
+      cierre: CIERRE_CERTIFICO, cierreEspacio: 3
+    })
   },
   {
-    id: 'matrimonio', grupo: 'matrimonio', estado: 'pendiente',
+    id: 'matrimonio', grupo: 'matrimonio', estado: 'listo',
     nombre: 'Certificado de matrimonio', titulo: 'Certificado de matrimonio realizado aquí',
-    campos: [CAMPOS.novio_nombre, CAMPOS.novio_apellidos, { k: 'novio_dni', label: 'DNI novio' },
-      CAMPOS.novia_nombre, CAMPOS.novia_apellidos, { k: 'novia_dni', label: 'DNI novia' },
-      { k: 'f_mat', label: 'Fecha matrimonio', tipo: 'date' }]
+    campos: [C.novio_nombre, C.novio_apellidos, { k: 'novio_dni', label: 'DNI novio', w: 3 },
+      C.novia_nombre, C.novia_apellidos, { k: 'novia_dni', label: 'DNI novia', w: 3 }, C.f_mat],
+    documento: (d, ctx) => {
+      const f = ctx.firmante || {};
+      return {
+        titulo: 'CERTIFICADO DE MATRIMONIO', tituloNegrita: true,
+        bloques: [
+          { linea: 'A QUIEN PUEDA INTERESAR:' },
+          { linea: `Yo, ${H.t(f.nombre)}, como ${H.t(f.cargo, '')},`, espacio: 1 },
+          { p: `certifico que con fecha ${H.fecha(d.f_mat)} han contraído matrimonio ${H.novio(d)}, con DNI ${H.t(d.novio_dni)}, y ${H.novia(d)}, con DNI ${H.t(d.novia_dni)}, tal y como consta en los archivos de nuestra Parroquia.`, espacio: 1 },
+        ],
+        cierre: CIERRE_CERTIFICO, cierreEspacio: 2, firmaEspacio: 5
+      };
+    }
   },
   {
     id: 'bendicion', grupo: 'matrimonio', estado: 'listo',
     nombre: 'Bendición apostólica boda',
     titulo: 'Bendición apostólica del Papa para el matrimonio',
-    campos: [CAMPOS.novio_nombre, CAMPOS.novio_apellidos, CAMPOS.novia_nombre, CAMPOS.novia_apellidos,
-      { k: 'f_mat', label: 'Fecha matrimonio', tipo: 'date' }],
-    documento: (d, ctx) => ({
-      destinatario: ['Excmo. y Rvdmo. Sr. Nuncio Apostólico', 'Nunciatura Apostólica en España', 'Pío XII, 46'],
-      saludo: 'Excmo. y Rvdmo. Sr.:',
-      bloques: [
-        { p: `Con ocasión del matrimonio de unos novios de nuestra parroquia quisiera solicitarle la Bendición Apostólica de S. S. ${H.t(ctx.config.papa, '________')} para ese día dirigida a ellos y a todos los participantes en la celebración.`, sangria: true },
-        { p: `Nombre del contrayente: ${H.nombre(d, 'novio_nombre', 'novio_apellidos')}`, espacio: 2 },
-        { p: `Nombre de la contrayente: ${H.nombre(d, 'novia_nombre', 'novia_apellidos')}`, espacio: 1 },
-        { p: `Lugar del matrimonio: ${H.t(ctx.config.nombre)} (${H.t(ctx.config.localidad)})`, espacio: 1 },
-        { p: `Día del matrimonio: ${H.fechaLarga(d.f_mat)}`, espacio: 1 }
-      ],
-      cierre: 'Con mi más devoto obsequio', cierreCentrado: true
-    })
+    campos: [{ k: 'motivo_bendicion', label: 'Motivo', tipo: 'select', opciones: ['Matrimonio', 'Bodas de plata', 'Bodas de oro'], w: 4 },
+      C.novio_nombre, C.novio_apellidos, C.novia_nombre, C.novia_apellidos, C.f_mat],
+    documento: (d, ctx) => {
+      const aniversario = d.motivo_bendicion && d.motivo_bendicion !== 'Matrimonio';
+      const lugar = `${H.t(ctx.config.nombre)} (${H.t(ctx.config.localidad)})`;
+      return {
+        destinatario: ['Excmo. y Rvdmo. Sr. Nuncio Apostólico', 'Nunciatura Apostólica en España', 'Pío XII, 46'],
+        saludo: 'Excmo. y Rvdmo. Sr.:',
+        bloques: [
+          { p: `Con ocasión ${aniversario ? `de las ${d.motivo_bendicion.toLowerCase()} de un matrimonio` : 'del matrimonio de unos novios'} de nuestra parroquia quisiera solicitarle la Bendición Apostólica de S. S. ${H.t(ctx.config.papa, '________')} para ese día dirigida a ellos y a todos los participantes en la celebración.`, sangria: true },
+          { p: `Nombre del contrayente: ${H.novio(d)}`, espacio: 2 },
+          { p: `Nombre de la contrayente: ${H.novia(d)}`, espacio: 1 },
+          { p: aniversario ? `Celebración del aniversario: ${lugar}` : `Lugar del matrimonio: ${lugar}`, espacio: 1 },
+          { p: `Día del matrimonio: ${H.fechaLarga(d.f_mat)}`, espacio: 1 }
+        ],
+        cierre: 'Con mi más devoto obsequio', cierreCentrado: true
+      };
+    }
   },
   { id: 'expediente', grupo: 'matrimonio', estado: 'pendiente', nombre: 'Expediente prematrimonial', titulo: 'Expediente prematrimonial', campos: [] },
   { id: 'alegato', grupo: 'matrimonio', estado: 'pendiente', nombre: 'Alegato V', titulo: 'Alegato V', campos: [] },
@@ -180,27 +255,40 @@ const CERTIFICADOS = [
   { id: 'exhorto', grupo: 'matrimonio', estado: 'pendiente', nombre: 'Exhorto amonestaciones (fuera)', titulo: 'Exhorto de amonestaciones', campos: [] },
   { id: 'registro_civil', grupo: 'matrimonio', estado: 'pendiente', nombre: 'Certificado registro civil', titulo: 'Certificado registro civil', campos: [] },
   {
-    id: 'comunicacion_matrimonio', grupo: 'matrimonio', estado: 'pendiente',
+    id: 'comunicacion_matrimonio', grupo: 'matrimonio', estado: 'listo',
     nombre: 'Comunicación de matrimonio', titulo: 'Comunicación de matrimonio a otras parroquias para inscripción',
-    campos: [{ k: 'parroquia_notif', label: 'Parroquia a notificar' }, { k: 'diocesis_notif', label: 'Diócesis' },
-      { k: 'poblacion_notif', label: 'Población' },
-      CAMPOS.novio_nombre, CAMPOS.novio_apellidos, CAMPOS.novia_nombre, CAMPOS.novia_apellidos,
-      { k: 'f_mat', label: 'Fecha matrimonio', tipo: 'date' },
-      { k: 'conyuge', label: 'Cónyuge a comunicar', tipo: 'select', opciones: ['Novio', 'Novia'] },
-      CAMPOS.f_bau, { k: 'libro_bau', label: 'Libro bautismo', corto: true },
-      { k: 'folio_bau', label: 'Folio bautismo', corto: true }, { k: 'num_bau', label: 'Número bautismo', corto: true }]
+    campos: [{ k: 'parroquia_notif', label: 'Parroquia a notificar', w: 6 }, { k: 'diocesis_notif', label: 'Diócesis', w: 3 },
+      { k: 'poblacion_notif', label: 'Población', w: 3 },
+      C.novio_nombre, C.novio_apellidos, C.novia_nombre, C.novia_apellidos,
+      C.f_mat, { k: 'conyuge', label: 'Cónyuge a comunicar', tipo: 'select', opciones: ['Novio', 'Novia'], w: 3 },
+      con(C.f_bau, { nueva: true, sep: true }), con(C.libro_bau, { label: 'Libro bautismo' }),
+      con(C.folio_bau, { label: 'Folio bautismo' }), con(C.num_bau, { label: 'Nº bautismo' })],
+    documento: (d) => {
+      const esNovia = d.conyuge === 'Novia';
+      return {
+        titulo: 'COMUNICACIÓN\nDE MATRIMONIO', tituloNegrita: true,
+        interlinea: 24,
+        bloques: [
+          { p: `Al Rvdo. Sr. Cura Párroco de ${H.t(d.parroquia_notif)}, diócesis de ${H.t(d.diocesis_notif)}, ${H.t(d.poblacion_notif)}` },
+          { p: `El día ${H.fecha(d.f_mat)} han contraído matrimonio en esta Parroquia`, espacio: 1 },
+          { linea: `D. ${H.novio(d)}  y`, negrita: true, espacio: 1 },
+          { linea: `Dña. ${H.novia(d)}`, negrita: true, espacio: 1 },
+          { p: `${esNovia ? H.novia(d) : H.novio(d)} fue ${esNovia ? 'bautizada' : 'bautizado'} en esa Parroquia de su digno cargo el ${H.fecha(d.f_bau)}, tal y como consta en el Libro ${H.t(d.libro_bau, '___')}, Folio ${H.t(d.folio_bau, '___')}, número ${H.t(d.num_bau, '___')}.`, espacio: 1 },
+          { p: 'Lo que le comunico a Ud. a los efectos de nota marginal a tenor de los cc. 1122, 2 y 535, 2.', espacio: 1 },
+        ],
+        cierre: CIERRE_CERTIFICO, cierreEspacio: 2.5, firmaEspacio: 4.5,
+        pie: 'tablaComunicacion'
+      };
+    }
   },
 
   /* ---------------- CONFIRMACIÓN ---------------- */
   {
     id: 'confirmacion', grupo: 'confirmacion', estado: 'listo',
     nombre: 'Certificado de confirmación', titulo: 'Certificado de confirmación',
-    campos: [CAMPOS.nombre, CAMPOS.apellidos, CAMPOS.sexo, CAMPOS.f_nac,
-      { k: 'f_conf', label: 'F. confirmación', tipo: 'date' },
-      { k: 'ministro_conf', label: 'Ministro', ph: 'Sr. D. …, Obispo Auxiliar de …' },
-      { k: 'libro_conf', label: 'Libro confir.', corto: true },
-      { k: 'folio_conf', label: 'Folio confir.', corto: true },
-      { k: 'num_conf', label: 'Nº confir.', corto: true }],
+    campos: [C.nombre, C.apellidos, C.sexo, C.f_nac, C.f_conf,
+      { k: 'libro_conf', label: 'Libro confir.', w: 2 }, { k: 'folio_conf', label: 'Folio confir.', w: 2 },
+      { k: 'num_conf', label: 'Nº confir.', w: 2 }, con(C.ministro_conf, { w: 12 })],
     documento: (d) => ({
       titulo: 'CERTIFICADO DE CONFIRMACIÓN',
       bloques: [
@@ -210,12 +298,22 @@ const CERTIFICADOS = [
     })
   },
   {
-    id: 'comunicacion_confirmacion', grupo: 'confirmacion', estado: 'pendiente',
+    id: 'comunicacion_confirmacion', grupo: 'confirmacion', estado: 'listo',
     nombre: 'Comunicación confirmación', titulo: 'Comunicación de confirmación',
-    campos: [{ k: 'parroquia_bau_orig', label: 'Parroquia baut.' }, { k: 'diocesis_bau_orig', label: 'Dióc. parroquia baut.' },
-      CAMPOS.nombre, CAMPOS.apellidos, CAMPOS.f_nac, { k: 'f_conf', label: 'F. confirmac.', tipo: 'date' },
-      CAMPOS.f_bau, { k: 'ministro_conf', label: 'Ministro' },
-      CAMPOS.libro_bau, CAMPOS.folio_bau, CAMPOS.num_bau]
+    campos: [{ k: 'parroquia_bau_orig', label: 'Parroquia de bautismo', w: 7 }, { k: 'diocesis_bau_orig', label: 'Diócesis parroquia baut.', w: 5 },
+      con(C.nombre, { nueva: true, sep: true }), C.apellidos, C.sexo,
+      C.f_nac, C.f_conf, C.f_bau, con(C.ministro_conf, { w: 12 }),
+      con(C.libro_bau, { nueva: true }), C.folio_bau, C.num_bau],
+    documento: (d) => ({
+      titulo: 'COMUNICACIÓN DE CONFIRMACIÓN',
+      bloques: [
+        { p: `Al Rvdo. Sr. Cura Párroco de la parroquia ${H.t(d.parroquia_bau_orig)}, diócesis de ${H.t(d.diocesis_bau_orig)}.` },
+        { p: `${H.nombre(d)} ${H.g(d, 'nacido', 'nacida')} el ${H.fecha(d.f_nac)} recibió el Sacramento de la confirmación el día ${H.fecha(d.f_conf)} en esta parroquia siendo ministro del sacramento ${H.t(d.ministro_conf, '______________________')}.`, espacio: 1 },
+        { p: `Fue ${H.g(d, 'bautizado', 'bautizada')} en la parroquia de su digno cargo el ${H.fecha(d.f_bau)} tal como consta en el libro ${H.t(d.libro_bau, '___')}, folio ${H.t(d.folio_bau, '___')}, nº ${H.t(d.num_bau, '___')}.`, espacio: 1 },
+        { p: 'Lo que le comunico a Ud. a los efectos de nota marginal a tenor de los cc. 895 y 535, 2.', espacio: 1 },
+      ],
+      cierre: CIERRE_CERTIFICO, cierreEspacio: 1.5, firmaEspacio: 4
+    })
   },
 ];
 
