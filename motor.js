@@ -429,10 +429,13 @@ const Motor = {
     // 11. Diligencias
     {
       const o = pagina(11);
-      if (d.diligencia !== 'Dispensa de amonestaciones') {
-        const dias = [d.proclamas_desde, d.proclamas_hasta].filter(Boolean).map(corta);
-        this.dato(o, dias.length > 1 ? `del ${dias[0]} al ${dias[1]}` : dias[0], [68, 144, 548]);
-        this.dato(o, d.proclamas_parroquias, [68, 162, 548]);
+      if (!AMON.dispensa(d)) {
+        // Esta parroquia: fechas de quien se amonesta aquí. Otras parroquias: nombre y fechas de quien se amonesta fuera.
+        const lados = AMON.lados(d, cfg), quien = x => (x.l === 'novio' ? 'el novio' : 'la novia');
+        const aqui = lados.filter(x => x.aqui && (x.desde || x.hasta)), fuera = lados.filter(x => !x.aqui && (x.parroquia || x.desde));
+        const igual = aqui.length === 2 && aqui[0].desde === aqui[1].desde && aqui[0].hasta === aqui[1].hasta;
+        this.dato(o, igual || aqui.length === 1 && !fuera.length ? AMON.rango(aqui[0]) : aqui.map(x => `${quien(x)} ${AMON.rango(x)}`).join('; '), [68, 144, 548]);
+        this.dato(o, fuera.map(x => `${x.parroquia || '___'} (${quien(x)}${AMON.rango(x) ? ', ' + AMON.rango(x) : ''})`).join('; ') || (d.proclamas_parroquias || ''), [68, 162, 548]);
       } else if (d.dispensa_motivo) {
         // empieza tras «por» y sigue en la línea de puntos de abajo
         const primera = this.cortar(d.dispensa_motivo, 10, 548 - 408);
@@ -457,12 +460,73 @@ const Motor = {
     return { paginas: res };
   },
 
+
+  /* ---------- EDICTO DE AMONESTACIONES (varias parejas) ---------- */
+  async maquetarEdicto(ctx, conFirma) {
+    const cfg = ctx.config, color = cfg.color || '#a8322d', firmante = ctx.firmante || {};
+    const parejas = ctx.edicto || [];
+    const X0 = 43, X1 = 552, TAM = 11.5, IL = 17;
+    const paginas = [];
+    const nueva = async (primera) => {
+      const ops = [];
+      if (cfg.logo) { const im = await this.encajar(cfg.logo, 34, 8, 112, 126); if (im) ops.push(im); }
+      ops.push({ tipo: 'linea', x1: cfg.logo ? 242 : 43, y1: 83, x2: 559, y2: 83, color, grosor: 1.2 });
+      [cfg.nombre, cfg.direccion, cfg.localidad, [cfg.cp, (cfg.provincia || '').toUpperCase()].filter(Boolean).join(' '), cfg.web]
+        .filter(Boolean).forEach((l, i) => ops.push(this.texto(l, 43, 152 + i * 10, 7, { color })));
+      const cx = 340;
+      ops.push(this.texto('EDICTO AMONESTACIONES', cx, 118, 17, { negrita: true, alinear: 'centro' }));
+      ops.push(this.texto('MATRIMONIALES', cx, 145, 17, { negrita: true, alinear: 'centro' }));
+      ops.push(this.texto(primera ? 'Pretenden contraer matrimonio' : 'Pretenden contraer matrimonio (continuación)', cx, 172, 11, { alinear: 'centro' }));
+      paginas.push(ops);
+      return { ops, y: 222 };
+    };
+    let { ops, y } = await nueva(true);
+    const hijo = (x, o) => {
+      const p = [x.padre, x.madre].map(v => (v || '').trim()).filter(Boolean);
+      return p.length ? `, hij${o} de ${p.join(' y ')}` : '';
+    };
+    for (const pa of parejas) {
+      // se mide la pareja antes de colocarla para no partirla entre dos hojas
+      const bloques = [
+        `**${(pa.novio_nombre + ' ' + (pa.novio_apellidos || '')).trim()}**${hijo({ padre: pa.novio_padre, madre: pa.novio_madre }, 'o')} con`,
+        `**${(pa.novia_nombre + ' ' + (pa.novia_apellidos || '')).trim()}**${hijo({ padre: pa.novia_padre, madre: pa.novia_madre }, 'a')}`,
+      ];
+      const medir = (yy) => {
+        const res = [];
+        bloques.forEach(b => { const r = this.parrafo(b, yy, { x0: X0, x1: X1, tam: TAM, interlinea: IL, justificar: false }); res.push(...r.ops); yy = r.y + IL; });
+        const fechas = AMON.rango(pa);
+        if (fechas) { res.push(this.texto('Desde ' + fechas.replace(/^del /, '').replace(' al ', ' a '), X0, yy, TAM)); yy += IL; }
+        return { res, yy };
+      };
+      let m = medir(y);
+      if (m.yy > 790) { ({ ops, y } = await nueva(false)); m = medir(y); }
+      ops.push(...m.res); y = m.yy + IL * 0.9;
+    }
+    if (!parejas.length) { ops.push(this.texto('No hay parejas seleccionadas.', X0, y, TAM, { color: '#888888' })); y += IL * 2; }
+
+    // Aviso y firma, al pie de la última hoja (o en una hoja más si no caben)
+    const AVISO = 'SI ALGUNA PERSONA SUPIERA ALGÚN IMPEDIMENTO ESTÁ OBLIGADA A MANIFESTARLO CUANTO ANTES AL SR. CURA PÁRROCO DURANTE LAS DOS SEMANAS SIGUIENTES A LA PUBLICACIÓN DEL PRESENTE EDICTO, conforme al canon 1069 del Código de Derecho Canónico.';
+    const yAviso = 640;
+    if (y > yAviso - 10) ({ ops, y } = await nueva(false));
+    const r = this.parrafo(AVISO, yAviso, { x0: X0, x1: X1, tam: 11, interlinea: 18, justificar: false });
+    ops.push(...r.ops);
+    const yFdo = Math.max(r.y + 70, 772);
+    if (conFirma) {
+      if (cfg.sello) { const im = await this.encajar(cfg.sello, 185, yFdo - 92, 128, 138); if (im) ops.unshift(im); }
+      if (firmante.firma) { const im = await this.encajar(firmante.firma, 330, yFdo - 112, 180, 104); if (im) ops.push(im); }
+    }
+    ops.push(this.texto('Fdo. ' + (firmante.nombre || '______________________'), M.der, yFdo, M.cuerpo, { alinear: 'der' }));
+    if (firmante.cargo) ops.push(this.texto(firmante.cargo, M.der, yFdo + 16, M.cuerpo, { alinear: 'der' }));
+    return { paginas };
+  },
+
   /* Maqueta completa de un certificado */
   async maquetar(cert, datos, ctx, conFirma) {
     const cfg = ctx.config;
     const doc = cert.documento(datos, ctx);
     if (doc.formato === 'alegato') return this.maquetarAlegato(datos, ctx);
     if (doc.formato === 'expediente') return this.maquetarExpediente(datos, ctx, ctx.parteExpediente);
+    if (doc.formato === 'edicto') return this.maquetarEdicto(ctx, conFirma);
     const color = cfg.color || '#a8322d';
     const IL = doc.interlinea || M.interlinea;
     const partida = doc.formato === 'partida';

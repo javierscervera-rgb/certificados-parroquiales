@@ -89,6 +89,36 @@ const con = (campo, cambios) => Object.assign({}, campo, cambios);
 
 // Datos de cada contrayente: los mismos en el Alegato V, el Expediente, el Atestado y la Fe de vida.
 // Clave real: novio_<k> o novia_<k>.
+/* Amonestaciones de cada contrayente (pestaña «Última página» del expediente):
+   amon_<novio|novia>_lugar ('Aquí' | 'Fuera'), amon_<lado>_parroquia (si es fuera), amon_<lado>_desde / _hasta.
+   «dispensa» = '1' si se pide dispensa de las proclamas. Se admiten los campos antiguos (proclamas_*). */
+const AMON = {
+  dispensa: d => d.dispensa === '1' || d.diligencia === 'Dispensa de amonestaciones',
+  lados(d, cfg) {
+    const parroquia = (cfg && cfg.nombre || '').replace(/^parroquia( de)?\s+/i, '');
+    return ['novio', 'novia'].map(l => {
+      const aqui = (d[`amon_${l}_lugar`] || 'Aquí') !== 'Fuera';
+      return {
+        l, aqui, parroquia: aqui ? parroquia : (d[`amon_${l}_parroquia`] || ''),
+        desde: d[`amon_${l}_desde`] || (aqui && !d[`amon_${l}_hasta`] ? d.proclamas_desde : '') || '',
+        hasta: d[`amon_${l}_hasta`] || (aqui && !d[`amon_${l}_desde`] ? d.proclamas_hasta : '') || '',
+      };
+    });
+  },
+  rango(x, f = H.fechaCorta) {
+    if (x.desde && x.hasta) return `del ${f(x.desde)} al ${f(x.hasta)}`;
+    if (x.desde || x.hasta) return `el ${f(x.desde || x.hasta)}`;
+    return '';
+  },
+  // «en la parroquia de X del … al …» (o por separado si cada contrayente se amonesta en un sitio)
+  texto(d, cfg, f = H.fecha) {
+    const [a, b] = AMON.lados(d, cfg);
+    const uno = x => `en la parroquia de ${H.t(x.parroquia)}${AMON.rango(x, f) ? ' ' + AMON.rango(x, f) : ''}`;
+    if (a.parroquia === b.parroquia && a.desde === b.desde && a.hasta === b.hasta) return uno(a);
+    return `el contrayente ${uno(a)} y la contrayente ${uno(b)}`;
+  },
+};
+
 const CAMPOS_PAREJA = [
   { k: 'nombre', label: 'Nombre', w: 12 },
   { k: 'apellido1', label: '1º Apellido', w: 6 }, { k: 'apellido2', label: '2º Apellido', w: 6 },
@@ -160,13 +190,12 @@ function atestado(d, ctx) {
       { p: `Es hij${o} de D. ${H.t(H.padre(d, l))} y de Dª ${H.t(H.madre(d, l))}, con DNI/NIE ${H.t(d[l + '_dni'])}, Registro civil de ${H.t(d[l + '_registro_civil'])}, tomo ${H.t(d[l + '_tomo_rc'], '___')}, página ${H.t(d[l + '_pagina_rc'], '___')}.`, espacio: 1 },
     ];
   };
-  const dias = [d.proclamas_desde, d.proclamas_hasta].filter(Boolean).map(H.fecha);
   const estados = [d.novio_estado_civil, d.novia_estado_civil].map(x => (x || '').toLowerCase());
   const solteros = estados.every(x => /^solter/.test(x)) ? 'solteros' : estados.filter(Boolean).join(' y ') || '__________';
   const bloques = [
     { centro: 'Salud y gracia en Nuestro Señor Jesucristo' },
     ...uno('novio'), ...uno('novia'),
-    { p: `Que han sido amonestados en las parroquias de ${H.t(d.proclamas_parroquias, '______________')} ${dias.length > 1 ? `del ${dias[0]} al ${dias[1]}` : `el día ${dias[0] || '__________'}`}.`, espacio: 2 },
+    { p: AMON.dispensa(d) ? 'Que se ha concedido dispensa de las proclamas matrimoniales.' : `Que han sido amonestados ${AMON.texto(d, ctx.config)}.`, espacio: 2 },
     { p: `En su virtud se declara a los contrayentes ${solteros} y libres para su proyectado matrimonio en la Parroquia de ${H.t(d.parroquia_boda)} el día ${H.fecha(d.f_mat)}.`, espacio: 2 },
     { p: 'Y para ello se concede Licencia y anuencia de jurisdicción en cuanto fuera posible.', espacio: 1.4 },
   ];
@@ -426,8 +455,10 @@ const CERTIFICADOS = [
     nombre: 'Atestado de libertad', titulo: 'Atestado de libertad',
     camposPareja: CAMPOS_PAREJA,
     campos: [
-      { k: 'proclamas_parroquias', label: 'Amonestados en las parroquias de', w: 6, sep: true },
-      { k: 'proclamas_desde', label: 'Proclamas desde el día', tipo: 'date', w: 3 }, { k: 'proclamas_hasta', label: 'Hasta el día', tipo: 'date', w: 3 },
+      ...['novio', 'novia'].flatMap((l, i) => [
+        { k: `amon_${l}_lugar`, label: `Amonestaciones ${l}`, tipo: 'select', opciones: ['Aquí', 'Fuera'], w: 3, nueva: true, sep: i === 0 },
+        { k: `amon_${l}_parroquia`, label: 'Parroquia (si es fuera)', w: 3 },
+        { k: `amon_${l}_desde`, label: 'Desde', tipo: 'date', w: 3 }, { k: `amon_${l}_hasta`, label: 'Hasta', tipo: 'date', w: 3 }]),
       { k: 'parroquia_boda', label: 'Parroquia de la boda', w: 9 }, { k: 'f_mat', label: 'Fecha boda', tipo: 'date', w: 3 },
     ],
     documento: (d, ctx) => atestado(d, ctx)
@@ -445,7 +476,8 @@ const CERTIFICADOS = [
     ],
     documento: () => ({ formato: 'alegato' })
   },
-  { id: 'amonestaciones', grupo: 'matrimonio', estado: 'pendiente', nombre: 'Amonestaciones activas', titulo: 'Amonestaciones activas', campos: [] },
+  { id: 'amonestaciones', grupo: 'matrimonio', estado: 'listo', nombre: 'Amonestaciones activas', titulo: 'Amonestaciones activas',
+    formato: 'edicto', sinCorreo: true, campos: [], documento: () => ({ formato: 'edicto' }) },
   {
     id: 'exhorto', grupo: 'matrimonio', estado: 'listo',
     nombre: 'Exhorto amonestaciones (fuera)', titulo: 'Exhorto de amonestaciones matrimoniales',

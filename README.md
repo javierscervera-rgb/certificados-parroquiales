@@ -30,7 +30,8 @@ Aplicación web para generar los certificados que se usan habitualmente en las p
 | Matrimonio | Expediente matrimonial (11 páginas sobre el impreso oficial; completo o por partes: portada, novio, novia, testigo 1, testigo 2, diligencias) | ✅ |
 | Matrimonio | Partida de matrimonio (libro, folio y número del libro de matrimonios; ministro) | ✅ |
 | Matrimonio | Fe de vida y estado (novio y novia) · Atestado de libertad (desde el expediente) | ✅ |
-| Matrimonio | Amonestaciones activas, registro civil | ⏳ falta el modelo |
+| Matrimonio | Amonestaciones activas: lista (se llena sola desde la última página del expediente, se borra 5 días después de la fecha final) y edicto con varias parejas (solo imprimir o guardar) | ✅ |
+| Matrimonio | Registro civil | ⏳ falta el modelo |
 | Confirmación | Certificado de confirmación | ✅ |
 | Confirmación | Comunicación de confirmación | ✅ |
 | Confirmación | Certificado para ser padrino/madrina de confirmación | ✅ |

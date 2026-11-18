@@ -205,7 +205,7 @@ const Google = (() => {
   // Huella de la configuración sin las listas que se unen solas (tareas, eliminados) ni la fecha
   function huella(c) {
     if (!c) return '';
-    const { tareas, eliminados, modificado, ...resto } = c;
+    const { tareas, amonestaciones, eliminados, modificado, ...resto } = c;
     const t = JSON.stringify(resto);
     let h = 5381; for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) | 0;
     return t.length + ':' + (h >>> 0).toString(36);
@@ -302,7 +302,7 @@ const Google = (() => {
     }
 
     const ahoraLocal = proveedor.obtenerDatos();
-    if (configLocalGana) { config = { ...ahoraLocal.config, tareas: (remota && remota.tareas) || [] }; st.pendiente.config = true; }
+    if (configLocalGana) { config = { ...ahoraLocal.config, tareas: (remota && remota.tareas) || [], amonestaciones: (remota && remota.amonestaciones) || [] }; st.pendiente.config = true; }
     let registros = unirRegistros(ahoraLocal.registros, remotos).map(r => decididos.get(r.id) || r);
 
     const final = proveedor.aplicarDatos(config, registros);

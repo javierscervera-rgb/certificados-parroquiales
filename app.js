@@ -50,7 +50,7 @@ const estado = {
   certId: null,
   descargas: null,
   firma: null,      // índice del firmante elegido; al abrir la aplicación no hay ninguno
-  pestanaExp: 'datos', parteExp: 'portada', volverA: null, abiertos: {},
+  pestanaExp: 'datos', parteExp: 'portada', volverA: null, abiertos: {}, edictoFuera: new Set(),
 };
 // Migración desde la primera versión (un único registro)
 if (!Array.isArray(estado.registros)) {
@@ -125,11 +125,11 @@ function elegirConflictos(lista) {
 }
 
 /* ---------------- GUARDAR ---------------- */
-const NO_CUENTAN = /^(sexo|sexo_manual|motivo_bendicion|conyuge|documentos|diligencia|feligres)$|_res_\d+$/;
+const NO_CUENTAN = /^(sexo|sexo_manual|motivo_bendicion|conyuge|documentos|diligencia|dispensa|feligres|amon_novio_lugar|amon_novia_lugar)$|_res_\d+$/;
 const tieneDatos = r => Object.entries(r.datos).some(([k, v]) => !NO_CUENTAN.test(k) && v && String(v).trim());
 const registrosGuardables = () => estado.registros.filter(r => tieneDatos(r) || r.id === estado.actualId);
 // Huella de los datos de la parroquia y firmantes (sin tareas ni eliminados): si cambia, se apunta la fecha
-function huellaConfig(c) { const { tareas, eliminados, modificado, ...resto } = c || {}; return JSON.stringify(resto); }
+function huellaConfig(c) { const { tareas, amonestaciones, eliminados, modificado, ...resto } = c || {}; return JSON.stringify(resto); }
 let _huellaConfig = null;
 function guardarConfig() {
   const h = huellaConfig(estado.config);
@@ -141,6 +141,7 @@ function guardarConfig() {
 }
 function guardarRegistro() {
   actual().actualizado = ahora();
+  sincronizarAmonestacion(actual());
   Almacen.guardar('registros', registrosGuardables());
   Almacen.guardar('actual', estado.actualId);
   Google.cambiado('registros');
@@ -153,15 +154,17 @@ Google.usarProveedor({
   obtenerDatos: () => ({ config: estado.config, registros: estado.registros.filter(tieneDatos) }),
   tituloRegistro: r => tituloRegistro(r),
   // Un ordenador que nunca ha tocado los datos de la parroquia no compite con los de Drive
-  configSinTocar: c => !c.modificado && huellaConfig(c) === huellaConfig(Object.assign(structuredClone(CONFIG_DEFECTO), { eliminados: c.eliminados, tareas: c.tareas })),
+  configSinTocar: c => !c.modificado && huellaConfig(c) === huellaConfig(Object.assign(structuredClone(CONFIG_DEFECTO), { eliminados: c.eliminados, tareas: c.tareas, amonestaciones: c.amonestaciones })),
   resolverConflictos: lista => elegirConflictos(lista),
   aplicarDatos: (config, registros) => {
     // los registros eliminados en cualquier ordenador no vuelven
     const eliminados = [...new Set([...(estado.config.eliminados || []), ...(config.eliminados || [])])];
     const tareas = unirTareas(estado.config.tareas, config.tareas);
+    const amonestaciones = unirTareas(estado.config.amonestaciones, config.amonestaciones);
     const firmaTareas = l => JSON.stringify((l || []).map(t => t.id + t.actualizado).sort());
-    const faltabanEnDrive = eliminados.length > (config.eliminados || []).length || firmaTareas(tareas) !== firmaTareas(config.tareas);
-    estado.config = Object.assign(structuredClone(CONFIG_DEFECTO), config, { eliminados, tareas });
+    const faltabanEnDrive = eliminados.length > (config.eliminados || []).length || firmaTareas(tareas) !== firmaTareas(config.tareas)
+      || firmaTareas(amonestaciones) !== firmaTareas(config.amonestaciones);
+    estado.config = Object.assign(structuredClone(CONFIG_DEFECTO), config, { eliminados, tareas, amonestaciones });
     _huellaConfig = huellaConfig(estado.config);
     registros = registros.filter(r => !eliminados.includes(r.id));
     const vacio = actual() && !tieneDatos(actual()) ? actual() : null;
@@ -206,6 +209,7 @@ async function eliminarRegistro() {
   if (!await confirmar(`¿Eliminar el registro de ${tituloRegistro(r)}? Se borrará también de Google Drive y no se puede deshacer.`, 'Eliminar')) return;
   const i = estado.registros.findIndex(x => x.id === r.id);
   estado.config.eliminados = [...(estado.config.eliminados || []), r.id];
+  (estado.config.amonestaciones || []).filter(a => a.registro === r.id && !a.borrada).forEach(a => Object.assign(a, { borrada: true, actualizado: ahora() }));
   estado.registros.splice(i, 1);
   const quedan = estado.registros.filter(tieneDatos);
   if (!quedan.length) estado.registros = [nuevoRegistro()];
@@ -491,7 +495,7 @@ function limites() {
   });
   Object.assign(m, {
     parroquia_boda: cabe(74, 548) - 12, domicilio_boda: cabe(74, 548), num_expediente: cabe(400, 487),
-    proclamas_parroquias: cabe(68, 548), dispensa_motivo: cabe(408, 548) + cabe(68, 548),
+    proclamas_parroquias: cabe(68, 548), amon_novio_parroquia: cabe(68, 548) - 32, amon_novia_parroquia: cabe(68, 548) - 32, dispensa_motivo: cabe(408, 548) + cabe(68, 548),
     otra_parroquia: cabe(364, 548, 2), motivo_otra_parroquia: cabe(257, 548),
   });
   return (_limites = m);
@@ -536,6 +540,7 @@ function campoHTML(c) {
 function vistaFormulario() {
   const cert = CERTIFICADOS.find(c => c.id === estado.certId);
   if (cert.formato === 'expediente') return vistaExpediente(cert);
+  if (cert.formato === 'edicto') return vistaAmonestaciones(cert);
   const listo = cert.estado === 'listo';
   const cfg = estado.config;
   const opcFirmas = cfg.firmas.map((f, i) => `<option value="${i}" ${i === estado.firma ? 'selected' : ''}>${esc(f.nombre)} — ${esc(f.cargo)}</option>`).join('');
@@ -587,6 +592,136 @@ function vistaFormulario() {
   </main>`;
 }
 
+
+
+/* ---------------- AMONESTACIONES ACTIVAS ----------------
+   Lista guardada con los datos de la parroquia (en Drive): una entrada por pareja que se amonesta aquí.
+   Se crea y actualiza sola desde la «Última página» del expediente; se puede editar o eliminar a mano
+   (lo editado a mano se respeta mientras no cambien esos datos en el expediente) y se borra sola
+   5 días después de la fecha final. */
+const amonCaducada = a => { const l = new Date(); l.setHours(0, 0, 0, 0); l.setDate(l.getDate() - 5); return !!a.hasta && new Date(a.hasta + 'T00:00:00') < l; };
+const amonVivas = () => (estado.config.amonestaciones || []).filter(a => !a.borrada && !amonCaducada(a));
+function amonDesdeRegistro(r) {
+  const d = r.datos;
+  if (AMON.dispensa(d)) return null;
+  const aqui = AMON.lados(d, estado.config).filter(x => x.aqui && (x.desde || x.hasta));
+  if (!aqui.length) return null;
+  const desde = aqui.map(x => x.desde).filter(Boolean).sort()[0] || '';
+  const hasta = aqui.map(x => x.hasta).filter(Boolean).sort().pop() || '';
+  const ap = l => [d[l + '_apellido1'], d[l + '_apellido2']].filter(x => x && x.trim()).join(' ') || d[l + '_apellidos'] || '';
+  return {
+    novio_nombre: d.novio_nombre || '', novio_apellidos: ap('novio'), novio_padre: d.novio_padre_nombre || '', novio_madre: d.novio_madre_nombre || '',
+    novia_nombre: d.novia_nombre || '', novia_apellidos: ap('novia'), novia_padre: d.novia_padre_nombre || '', novia_madre: d.novia_madre_nombre || '',
+    desde, hasta, quien: aqui.length === 2 ? 'Novio y novia' : aqui[0].l === 'novio' ? 'Novio' : 'Novia',
+  };
+}
+function sincronizarAmonestacion(r) {
+  if (!r || !r.datos) return;
+  const d = r.datos;
+  if (!Object.keys(d).some(k => /^amon_|^dispensa$|^proclamas_/.test(k))) return;
+  const lista = estado.config.amonestaciones = estado.config.amonestaciones || [];
+  const e = lista.find(x => x.registro === r.id), datos = amonDesdeRegistro(r);
+  if (!datos) {
+    if (e && !e.borrada) { Object.assign(e, { borrada: true, actualizado: ahora(), huella: '' }); guardarConfig(); }
+    return;
+  }
+  const huella = JSON.stringify(datos);
+  if (e && e.huella === huella) return;            // nada nuevo en el expediente: se respeta lo editado o borrado a mano
+  if (e) Object.assign(e, datos, { huella, borrada: false, actualizado: ahora() });
+  else lista.push({ id: 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), registro: r.id, ...datos, huella, creada: ahora(), actualizado: ahora() });
+  guardarConfig();
+}
+// Se borran solas 5 días después de la fecha final
+function limpiarAmonestaciones() {
+  let cambio = false;
+  (estado.config.amonestaciones || []).forEach(a => {
+    if (!a.borrada && amonCaducada(a)) { Object.assign(a, { borrada: true, actualizado: ahora() }); cambio = true; }
+  });
+  if (cambio) guardarConfig();
+}
+function parejasEdicto() {
+  return amonVivas().filter(a => !estado.edictoFuera.has(a.id)).sort((a, b) => (a.desde || '').localeCompare(b.desde || ''));
+}
+
+function vistaAmonestaciones(cert) {
+  limpiarAmonestaciones();
+  const cfg = estado.config;
+  const opcFirmas = cfg.firmas.map((f, i) => `<option value="${i}" ${i === estado.firma ? 'selected' : ''}>${esc(f.nombre)} — ${esc(f.cargo)}</option>`).join('');
+  const lista = amonVivas().sort((a, b) => (a.desde || '').localeCompare(b.desde || ''));
+  const nombre = (n, a) => esc([n, a].filter(Boolean).join(' ') || '—');
+  const padres = (p, m, o) => (p || m) ? `<small>hij${o} de ${esc([p, m].filter(Boolean).join(' y '))}</small>` : '';
+  const filas = lista.map(a => `<li class="amon ${estado.edictoFuera.has(a.id) ? 'fuera' : ''}">
+      <label class="amon-incluir" title="Incluir en el edicto"><input type="checkbox" data-amon-incluir="${a.id}" ${estado.edictoFuera.has(a.id) ? '' : 'checked'}></label>
+      <div class="amon-pareja">
+        <div><strong>${nombre(a.novio_nombre, a.novio_apellidos)}</strong>${padres(a.novio_padre, a.novio_madre, 'o')}</div>
+        <div><strong>${nombre(a.novia_nombre, a.novia_apellidos)}</strong>${padres(a.novia_padre, a.novia_madre, 'a')}</div>
+      </div>
+      <div class="amon-fechas">${a.desde ? H.fechaCorta(a.desde) : '—'} → ${a.hasta ? H.fechaCorta(a.hasta) : '—'}<small>Aquí: ${esc((a.quien || '').toLowerCase())}</small></div>
+      <div class="amon-acc">
+        <button class="btn" data-amon-editar="${a.id}">Editar</button>
+        <button class="tarea-borrar" data-amon-borrar="${a.id}" title="Eliminar" aria-label="Eliminar">${IC.papelera}</button>
+      </div>
+    </li>`).join('');
+  return `
+  ${cabecera(esc(cert.titulo))}
+  <main>
+    <div class="form-layout">
+      <div class="tarjeta">
+        <div class="rejilla">
+          <div class="campo" style="grid-column:span 6"><label for="selFirma">Firma</label><select id="selFirma">${opcFirmas}</select></div>
+          <div class="campo" style="grid-column:span 3"><label for="fechaDoc">Fecha del documento</label><input type="date" id="fechaDoc" value="${estado.fechaDocumento}"></div>
+        </div>
+        <hr class="sep">
+        <div class="cab-registros"><h3>Parejas que se amonestan aquí</h3><span class="contador">${lista.length} activa${lista.length === 1 ? '' : 's'} · ${parejasEdicto().length} en el edicto</span></div>
+        <ul class="lista-amon">${filas || '<li class="nota" style="padding:14px 0">No hay amonestaciones activas. Se añaden solas desde la «Última página» del expediente cuando alguno de los novios se amonesta aquí.</li>'}</ul>
+        <p class="nota">Marca las parejas que van en el edicto. Cada pareja se borra sola 5 días después de su fecha final.</p>
+      </div>
+      <div class="lateral">
+        <button class="acc" data-ir="menu">${IC.menu}Menú principal</button>
+        ${estado.volverA === 'expediente' ? `<button class="acc" data-abrir="expediente">${IC.ant}Volver al expediente</button>` : ''}
+        <button class="miniatura" id="previa" title="Pulsa para ampliar"></button>
+        <div class="grupo-acc"><span>${IC.imprimir}Imprimir edicto</span>
+          <button class="acc" data-imprimir="1">${IC.pluma}<span>Con firma<small>Con sello y firma escaneada</small></span></button>
+          <button class="acc" data-imprimir="0">${IC.pdf.replace('M12 10v7M9 14l3 3 3-3', 'M9 12h6M9 16h6')}<span>Sin firma<small>Para firmar a mano</small></span></button>
+        </div>
+        <div class="grupo-acc"><span>${IC.guardar}Guardar PDF</span>
+          <button class="acc" data-pdf="1">${IC.pluma}<span>Con firma<small>Con sello y firma escaneada</small></span></button>
+          <button class="acc" data-pdf="0">${IC.pdf.replace('M12 10v7M9 14l3 3 3-3', 'M9 12h6M9 16h6')}<span>Sin firma<small>Para firmar a mano</small></span></button>
+        </div>
+      </div>
+    </div>
+  </main>`;
+}
+
+function editarAmonestacion(id) {
+  const a = amonVivas().find(x => x.id === id); if (!a) return;
+  const c = (k, label, w, tipo) => `<div class="campo" style="grid-column:span ${w}"><label for="am_${k}">${label}</label><input id="am_${k}" data-am="${k}" type="${tipo || 'text'}" value="${esc(a[k] || '')}" autocomplete="off"></div>`;
+  const m = document.createElement('div');
+  m.className = 'modal';
+  m.innerHTML = `<form class="caja amon-editar">
+      <h3>Editar amonestación</h3>
+      <div class="rejilla">
+        ${c('novio_nombre', 'Nombre novio', 4)}${c('novio_apellidos', 'Apellidos', 8)}
+        ${c('novio_padre', 'Padre (nombre de pila)', 6)}${c('novio_madre', 'Madre (nombre de pila)', 6)}
+        <hr class="sep">
+        ${c('novia_nombre', 'Nombre novia', 4)}${c('novia_apellidos', 'Apellidos', 8)}
+        ${c('novia_padre', 'Padre (nombre de pila)', 6)}${c('novia_madre', 'Madre (nombre de pila)', 6)}
+        <hr class="sep">
+        ${c('desde', 'Fecha de inicio', 4, 'date')}${c('hasta', 'Fecha final', 4, 'date')}
+        <div class="campo" style="grid-column:span 4"><label for="am_quien">Se amonesta aquí</label><select id="am_quien" data-am="quien">
+          ${['Novio y novia', 'Novio', 'Novia'].map(o => `<option ${a.quien === o ? 'selected' : ''}>${o}</option>`).join('')}</select></div>
+      </div>
+      <div class="fila" style="justify-content:flex-end;margin-top:16px"><button type="button" class="btn" data-am-cancelar>Cancelar</button><button type="submit" class="btn prim">Guardar</button></div>
+    </form>`;
+  m.addEventListener('click', e => { if (e.target.closest('[data-am-cancelar]') || e.target === m) m.remove(); });
+  m.querySelector('form').addEventListener('submit', e => {
+    e.preventDefault();
+    m.querySelectorAll('[data-am]').forEach(el => { a[el.dataset.am] = el.value.trim(); });
+    a.actualizado = ahora(); guardarConfig(); m.remove(); render();
+  });
+  document.body.appendChild(m);
+  m.querySelector('input').focus();
+}
 
 /* ---------------- EXPEDIENTE MATRIMONIAL ---------------- */
 const PESTANAS_EXP = [
@@ -668,24 +803,34 @@ function vistaExpediente(cert) {
       ${juramentoHTML(pest + '_juramento', '¿Acepta Vd. responder a las siguientes preguntas bajo juramento?')}
       <div style="grid-column:1/-1">${seccionesHTML(EXPEDIENTE.testigo, pest + '_')}</div>`;
   } else {
-    const dispensa = d.diligencia === 'Dispensa de amonestaciones';
+    // campos antiguos → nuevos
+    if (d.diligencia === 'Dispensa de amonestaciones' && d.dispensa === undefined) d.dispensa = '1';
+    const dispensa = AMON.dispensa(d);
+    const lado = l => {
+      const fuera = d[`amon_${l}_lugar`] === 'Fuera';
+      return `<div class="columna-pareja"><h4>Amonestaciones ${l}</h4><div class="rejilla">
+        <div class="campo" style="grid-column:1/-1"><div class="sexo" data-opcion="amon_${l}_lugar">
+          ${['Aquí', 'Fuera'].map(o => `<button type="button" data-v="${o}" class="${(fuera ? 'Fuera' : 'Aquí') === o ? 'on' : ''}">Amonestaciones ${o.toLowerCase()}</button>`).join('')}</div></div>
+        ${fuera ? campoHTML({ k: `amon_${l}_parroquia`, label: 'Parroquia', w: 12 }) : ''}
+        ${campoHTML({ k: `amon_${l}_desde`, label: 'Fecha de inicio', tipo: 'date', w: 6 })}${campoHTML({ k: `amon_${l}_hasta`, label: 'Fecha final', tipo: 'date', w: 6 })}
+      </div></div>`;
+    };
     cuerpo = `<div class="intro-exp" style="grid-column:1/-1"><h4>Diligencias</h4></div>
-      <div class="campo" style="grid-column:1/-1"><div class="sexo opciones-dil" data-opcion="diligencia">
-        ${['Amonestaciones aquí', 'Dispensa de amonestaciones'].map(o => `<button type="button" data-v="${o}" class="${d.diligencia === o ? 'on' : ''}">${o}</button>`).join('')}</div></div>
+      <div class="campo" style="grid-column:1/-1"><button type="button" class="interruptor ${dispensa ? 'on' : ''}" data-dispensa aria-pressed="${dispensa}">
+        <span class="int-caja"></span>Dispensa de amonestaciones</button></div>
       ${dispensa
         ? campoHTML({ k: 'dispensa_motivo', label: 'Los contrayentes solicitan dispensa de las proclamas matrimoniales por', w: 12 })
-        : campoHTML({ k: 'proclamas_desde', label: 'Las proclamas matrimoniales fueron publicadas en esta parroquia desde el día', tipo: 'date', w: 4 }) +
-          campoHTML({ k: 'proclamas_hasta', label: 'hasta el día', tipo: 'date', w: 4 }) +
-          campoHTML({ k: 'proclamas_parroquias', label: 'y en las parroquias de', w: 12 })}
+        : `<div class="pareja">${lado('novio')}${lado('novia')}</div>
+           <p class="nota" style="grid-column:1/-1;margin:0">Quien se amonesta aquí pasa solo a <strong>Amonestaciones activas</strong> (para el edicto).</p>`}
       <hr class="sep"><p class="nota" style="grid-column:1/-1;margin:0">Si procede</p>
       ${campoHTML({ k: 'otra_parroquia', label: 'Los contrayentes solicitan la celebración de su matrimonio en', w: 12 })}
       ${campoHTML({ k: 'motivo_otra_parroquia', label: 'Motivo', w: 12 })}`;
   }
   const partes = EXPEDIENTE.partes.map(p => `<option value="${p.id}" ${p.id === estado.parteExp ? 'selected' : ''}>${p.nombre}</option>`).join('');
   const otros = [
-    ['alegato', 'Alegato V'], ['exhorto:Novio', 'Exhorto novio'], ['exhorto:Novia', 'Exhorto novia'],
+    ['alegato', 'Alegato V'], ['exhorto:Novio', 'Exhorto amonest. novio'], ['exhorto:Novia', 'Exhorto amonest. novia'],
     ['fe_vida_novio', 'Fe de vida y estado novio'], ['fe_vida_novia', 'Fe de vida y estado novia'], ['atestado', 'Atestado de libertad'],
-  ].map(([id, n]) => `<button class="btn" data-otro-doc="${id}">${n}</button>`).join('') + `<button class="btn" disabled title="Falta el modelo">Amonestaciones</button>`;
+  ].map(([id, n]) => `<button class="btn" data-otro-doc="${id}">${n}</button>`).join('') + `<button class="btn" data-otro-doc="amonestaciones">Amonestaciones activas (edicto)</button>`;
   return `
   ${cabecera(esc(cert.titulo))}
   <main>
@@ -740,7 +885,7 @@ function abrirAmpliada() {
   m.addEventListener('click', e => { if (e.target === m || e.target.closest('[data-cerrar]')) m.remove(); });
   document.body.appendChild(m);
 }
-function ctx() { return { config: estado.config, firmante: firmante(), fechaDocumento: estado.fechaDocumento, parteExpediente: estado.parteExp }; }
+function ctx() { return { config: estado.config, firmante: firmante(), fechaDocumento: estado.fechaDocumento, parteExpediente: estado.parteExp, edicto: parejasEdicto() }; }
 
 async function crearPDF(conFirma) {
   const cert = CERTIFICADOS.find(c => c.id === estado.certId);
@@ -748,7 +893,8 @@ async function crearPDF(conFirma) {
   const bytes = await Motor.aPDF(res, cert.titulo);
   const quien = tituloRegistro(actual()).replace('(registro vacío)', '');
   const parte = cert.formato === 'expediente' ? ' - ' + (EXPEDIENTE.partes.find(p => p.id === estado.parteExp) || {}).nombre : '';
-  const nombre = `${cert.formato === 'expediente' ? 'Expediente matrimonial' : cert.nombre}${parte}${quien ? ' - ' + quien : ''}.pdf`.replace(/[\\/:*?"<>|]/g, '');
+  const nombre = cert.formato === 'edicto' ? `Edicto de amonestaciones ${H.fechaCorta(estado.fechaDocumento).replace(/\//g, '-')}.pdf`
+    : `${cert.formato === 'expediente' ? 'Expediente matrimonial' : cert.nombre}${parte}${quien ? ' - ' + quien : ''}.pdf`.replace(/[\\/:*?"<>|]/g, '');
   return { bytes, nombre, cert };
 }
 
@@ -1039,6 +1185,15 @@ document.addEventListener('click', async e => {
   if (sumario && !e.target.closest('.resuelto') && sumario.parentElement.dataset.estado !== 'resuelto') { e.preventDefault(); return; }
   if (e.target.closest('summary .resuelto')) { e.stopPropagation(); if (e.target.tagName !== 'INPUT') { e.preventDefault(); e.target.closest('.resuelto').querySelector('input').click(); } return; }
   const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.amonEditar) { editarAmonestacion(t.dataset.amonEditar); return; }
+  if (t.dataset.amonBorrar) {
+    if (await confirmar('¿Eliminar esta pareja de las amonestaciones activas?', 'Eliminar')) {
+      const a = amonVivas().find(x => x.id === t.dataset.amonBorrar);
+      if (a) { Object.assign(a, { borrada: true, actualizado: ahora() }); guardarConfig(); render(); }
+    }
+    return;
+  }
+  if (t.dataset.dispensa !== undefined) { estado.registro.dispensa = AMON.dispensa(estado.registro) ? '' : '1'; if (!estado.registro.dispensa) estado.registro.diligencia = ''; guardarRegistro(); render(); return; }
   if (t.dataset.tareaBorrar) { if (await confirmar('¿Eliminar esta tarea?', 'Eliminar')) { cambiarTarea(t.dataset.tareaBorrar, { borrada: true }); pintarTareas(); } return; }
   if (t.dataset.tareasLimpiar !== undefined) { (estado.config.tareas || []).filter(x => x.hecha && !x.borrada).forEach(x => Object.assign(x, { borrada: true, actualizado: ahora() })); guardarConfig(); pintarTareas(); return; }
   if (t.dataset.tam) cambiarEscala(+t.dataset.tam);
@@ -1083,7 +1238,7 @@ document.addEventListener('click', async e => {
     try { await descargarPDF(t.dataset.pdf === '1'); } catch (err) { console.error(err); aviso('No se pudo generar el PDF.'); }
     t.disabled = false;
   }
-  else if (t.hasAttribute('data-correo')) abrirCorreo();
+  else if (t.hasAttribute('data-correo')) { if (!(CERTIFICADOS.find(c => c.id === estado.certId) || {}).sinCorreo) abrirCorreo(); }
   else if (t.id === 'm_enviar') enviarCorreo(t);
   else if (t.closest('[data-sexo]')) {
     estado.registro.sexo = t.dataset.v; estado.registro.sexo_manual = '1'; guardarRegistro();
@@ -1154,6 +1309,7 @@ document.addEventListener('submit', e => {
 
 document.addEventListener('change', async e => {
   const el = e.target;
+  if (el.dataset.amonIncluir) { if (el.checked) estado.edictoFuera.delete(el.dataset.amonIncluir); else estado.edictoFuera.add(el.dataset.amonIncluir); render(); return; }
   if (el.dataset.tareaHecha) { cambiarTarea(el.dataset.tareaHecha, { hecha: el.checked }); pintarTareas(); return; }
   if (el.dataset.tarea) {
     const v = el.value.trim();
