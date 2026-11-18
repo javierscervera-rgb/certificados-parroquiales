@@ -150,7 +150,12 @@ const Google = (() => {
   const SHEETS = 'https://sheets.googleapis.com/v4/spreadsheets';
   function etiquetas() {
     const m = { id: 'Id', creado: 'Creado', actualizado: 'Actualizado' };
-    (typeof CERTIFICADOS !== 'undefined' ? CERTIFICADOS : []).forEach(c => c.campos.forEach(f => { if (!m[f.k]) m[f.k] = f.label; }));
+    (typeof CERTIFICADOS !== 'undefined' ? CERTIFICADOS : []).forEach(c => {
+      c.campos.forEach(f => { if (!m[f.k]) m[f.k] = f.label; });
+      (c.camposPareja || []).forEach(f => [['novio', 'Novio'], ['novia', 'Novia']].forEach(([l, L]) => {
+        const k = f.clave ? f.clave(l) : `${l}_${f.k}`; if (!m[k]) m[k] = `${L}: ${f.label}`;
+      }));
+    });
     return m;
   }
   function aFilas(registros) {

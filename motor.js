@@ -31,8 +31,18 @@ const Motor = {
     }
   },
 
+  // Ancho del texto letra a letra, sin "kerning": así coincide con cómo se dibuja en el PDF
+  _anchos: { normal: new Map(), negrita: new Map() },
   ancho(texto, tam, negrita) {
-    return (negrita ? this.fuentes.negrita : this.fuentes.normal).widthOfTextAtSize(texto, tam);
+    const f = negrita ? this.fuentes.negrita : this.fuentes.normal;
+    const cache = this._anchos[negrita ? 'negrita' : 'normal'];
+    let total = 0;
+    for (const c of String(texto)) {
+      let w = cache.get(c);
+      if (w === undefined) { try { w = f.widthOfTextAtSize(c, 1000); } catch (e) { w = 500; } cache.set(c, w); }
+      total += w;
+    }
+    return total * tam / 1000;
   },
 
   async medirImagen(src) {
@@ -195,10 +205,136 @@ const Motor = {
     return ops;
   },
 
+
+  /* ---------- Formularios con líneas de puntos (Alegato V) ---------- */
+  // partes: textos fijos y huecos {v: valor, w: fracción del espacio libre}; el último hueco sin w ocupa el resto
+  lineaPuntos(partes, y, { x0 = 48, x1 = 556, tam = 12 } = {}) {
+    const ops = [], gris = '#777777';
+    const ancho = (t, n) => this.ancho(this.limpiar(t, n), tam, n);
+    const punto = this.ancho('.', tam);
+    const fijos = partes.filter(p => typeof p === 'string').reduce((a, t) => a + ancho(t), 0);
+    const libre = Math.max(0, (x1 - x0) - fijos);
+    let x = x0;
+    partes.forEach((p, i) => {
+      if (typeof p === 'string') { if (p) { ops.push(this.texto(p, x, y, tam)); x += ancho(p); } return; }
+      const resto = partes.slice(i + 1).some(q => typeof q !== 'string');
+      let hueco = p.w != null ? libre * p.w : (resto ? libre * 0.3 : x1 - x - partes.slice(i + 1).reduce((a, t) => a + (typeof t === 'string' ? ancho(t) : 0), 0));
+      const v = (p.v ?? '').toString().trim();
+      let xv = x;
+      if (v) {
+        const wv = ancho(' ' + v + ' ', true);
+        ops.push(this.texto(v, x + ancho(' '), y, tam, { negrita: true }));
+        xv = x + wv; hueco = Math.max(hueco, wv);
+      }
+      const n = Math.max(0, Math.floor((x + hueco - xv) / punto));
+      if (n) ops.push(this.texto('.'.repeat(n), xv, y, tam, { color: gris }));
+      x += hueco;
+    });
+    return ops;
+  },
+
+  // Texto en párrafo normal sin justificar, con interlineado propio
+  bloqueTexto(texto, y, { x0 = 48, x1 = 556, tam = 12, interlinea = 17, justificar = true } = {}) {
+    return this.parrafo(texto, y, { x0, x1, tam, interlinea, justificar });
+  },
+
+  async maquetarAlegato(d, ctx) {
+    const cfg = ctx.config, x0 = 48, x1 = 556, IL = 19.5;
+    const gris = '#8a8a8a';
+    const nombre = l => [d[l + '_nombre'], d[l + '_apellido1'], d[l + '_apellido2']].filter(x => x && x.trim()).join(' ') ||
+      [d[l + '_nombre'], d[l + '_apellidos']].filter(x => x && x.trim()).join(' ');
+    const f = v => v ? H.fecha(v) : '';
+    const anio = (/^(\d{4})/.exec(ctx.fechaDocumento || '') || [])[1] || String(new Date().getFullYear());
+
+    // ---------- Página 1: autorización ----------
+    const p1 = [];
+    p1.push(this.texto(cfg.nombre || '', 311, 26, 12.5, { negrita: true, color: gris }));
+    p1.push(this.texto(`${cfg.vicaria || 'Vicaría'}   Nº ${d.num_expediente || ''}`, 311, 41, 12.5, { negrita: true, color: gris }));
+    p1.push(this.texto(`Libro ${anio}`, 558, 41, 12.5, { negrita: true, alinear: 'der', color: gris }));
+    if (cfg.logoDiocesis) { const im = await this.encajar(cfg.logoDiocesis, 62, 38, 66, 54); if (im) p1.push(im); }
+    p1.push(this.texto((cfg.diocesisTitulo || 'ARZOBISPADO').toUpperCase(), A4.w / 2 + 2, 73, 19, { negrita: true, alinear: 'centro' }));
+    p1.push(this.texto('AUTORIZACIÓN DE MATRIMONIO', A4.w / 2 + 2, 104, 14.5, { alinear: 'centro', color: '#333333' }));
+
+    p1.push(...this.lineaPuntos(['Al Rvdo. Sr. Cura Párroco de', { v: d.parroquia_boda }, '.'], 139, { x0, x1 }));
+    const intro = this.bloqueTexto('En esta Vicaría General y por el infrascrito Notario se ha seguido expediente, aprobado con fecha de hoy, para el matrimonio que pretenden contraer:', 171, { x0, x1, interlinea: 17.5 });
+    p1.push(...intro.ops);
+
+    const contrayente = (l, y) => {
+      const M = l === 'novio';
+      const o = M ? 'o' : 'a';
+      const parroquiaBau = [d[l + '_parroquia_bau'], d[l + '_ciudad_bau'] ? `(${d[l + '_ciudad_bau']})` : ''].filter(Boolean).join(' ');
+      const domicilio = [d[l + '_domicilio'], d[l + '_parroquia_domicilio'] ? `(parroquia ${d[l + '_parroquia_domicilio']})` : ''].filter(Boolean).join(' ');
+      const lineas = [
+        [M ? 'DON' : 'DOÑA', { v: nombre(l) }],
+        [`nacid${o} en`, { v: d[l + '_lugar_nac'], w: .55 }, ', el día', { v: f(d[l + '_f_nac']) }],
+        [`bautizad${o} en la parroquia`, { v: parroquiaBau }],
+        ['de la Diócesis de', { v: d[l + '_diocesis_bau'] }],
+        ['el día', { v: f(d[l + '_f_bau']) }],
+        ['libro', { v: d[l + '_libro_bau'], w: .2 }, ' folio', { v: d[l + '_folio_bau'], w: .2 }, ' nº', { v: d[l + '_num_bau'] }],
+        ['de', { v: H.edad(d[l + '_f_nac'], ctx.fechaDocumento), w: .3 }, ' años de edad, de estado', { v: d[l + '_estado_civil'] }],
+        [`hij${o} de`, { v: d['padre_' + l], w: .5 }, ' y', { v: d['madre_' + l] }],
+        [`domiciliad${o} en`, { v: domicilio }],
+        ['D.N.I.', { v: d[l + '_dni'] }],
+        ['Registro civil', { v: d[l + '_registro_civil'], w: .45 }, ', tomo', { v: d[l + '_tomo_rc'], w: .2 }, ', página', { v: d[l + '_pagina_rc'] }],
+      ];
+      lineas.forEach((ln, i) => p1.push(...this.lineaPuntos(ln, y + i * IL, { x0, x1 })));
+    };
+    contrayente('novio', 224);
+    contrayente('novia', 454);
+
+    p1.push(...this.bloqueTexto('y no resultando impedimento alguno, damos el presente despacho para que, ante Vd. u otro sacerdote o diácono, con delegación suya, puedan contraer matrimonio canónico.', 676, { x0, x1, interlinea: 17.5 }).ops);
+    p1.push(...this.lineaPuntos([`Dado en ${cfg.vicariaCiudad || '__________'} a`, { v: '', w: .12 }, ' de', { v: '', w: .4 }, ' de', { v: '', w: .25 }], 722, { x0, x1: 360 }));
+    const centroIzq = 205, centroDer = 455;
+    p1.push(this.texto(cfg.vicario || '', centroIzq, 799, 11.5, { alinear: 'centro' }));
+    p1.push(this.texto(cfg.vicarioCargo || 'Vicario Episcopal', centroIzq, 812, 11.5, { alinear: 'centro' }));
+    p1.push(this.texto('Por mandato', centroDer, 799, 11.5, { alinear: 'centro' }));
+    p1.push(this.texto('El Notario', centroDer, 812, 11.5, { alinear: 'centro' }));
+    const pie = [cfg.vicaria, [[cfg.vicariaCalle, cfg.vicariaNumero].filter(Boolean).join(', '), [cfg.vicariaCP, cfg.vicariaCiudad].filter(Boolean).join(' ')].filter(Boolean).join(' – '),
+      cfg.vicariaEmail ? 'Email: ' + cfg.vicariaEmail : '', cfg.vicariaTelefono ? 'Teléfono ' + cfg.vicariaTelefono : ''].filter(Boolean).join('   ');
+    if (pie) p1.push(this.texto(pie, A4.w / 2, 833, 8, { negrita: true, alinear: 'centro' }));
+
+    // ---------- Página 2: reverso ----------
+    const p2 = [], X0 = 47, X1 = 554, L = 21.5;
+    const titulo = (t, y) => p2.push(this.texto(t, X0, y, 11.5, { color: '#222222' }));
+    const parroco = (y) => { p2.push(this.texto('El Párroco', A4.w / 2, y, 11.5, { alinear: 'centro' })); p2.push(this.texto('(Sello)', A4.w / 2, y + 13, 11.5, { alinear: 'centro', color: '#444444' })); };
+    const fechaLugar = (y) => p2.push(...this.lineaPuntos([{ v: '', w: .3 }, ', a', { v: '', w: .14 }, ' de', { v: '', w: .3 }, ' de', { v: '' }], y, { x0: 152, x1: 445, tam: 11.5 }));
+
+    titulo('EN CASO DE DELEGACIÓN', 40);
+    p2.push(this.texto('Para que pueda asistir lícita y válidamente a la celebración de este matrimonio dentro de los límites', X0, 62, 11.5));
+    p2.push(...this.lineaPuntos(['de esta parroquia, delegamos, conforme al c. 1111, 1º, al Rvdo. D.', { v: d.delegado }], 62 + L, { x0: X0, x1: X1, tam: 11.5 }));
+    p2.push(...this.lineaPuntos([{ v: '' }], 62 + 2 * L, { x0: X0, x1: X1, tam: 11.5 }));
+    fechaLugar(62 + 3 * L);
+    parroco(62 + 4 * L + 2);
+
+    titulo('CONSTANCIA DE LA CELEBRACIÓN', 226);
+    p2.push(...this.lineaPuntos(['Este matrimonio se celebró en la parroquia de', { v: d.parroquia_boda }], 245, { x0: X0, x1: X1, tam: 11.5 }));
+    p2.push(...this.lineaPuntos(['el día', { v: '', w: .25 }, ' de', { v: '', w: .32 }, ' de', { v: '' }, ' asistiendo a la celebración'], 266, { x0: X0, x1: X1, tam: 11.5 }));
+    p2.push(...this.lineaPuntos(['el Rvdo. D.', { v: '' }, ' y siendo testigos'], 287, { x0: X0, x1: X1, tam: 11.5 }));
+    p2.push(...this.lineaPuntos(['D.', { v: '' }], 308, { x0: X0, x1: X1, tam: 11.5 }));
+    p2.push(...this.lineaPuntos(['y D.', { v: '' }], 329, { x0: X0, x1: X1, tam: 11.5 }));
+    [['El Párroco o', 134], ['El contrayente', 278], ['La contrayente', 470]].forEach(([t, x]) => p2.push(this.texto(t, x, 343, 11.5, { alinear: 'centro' })));
+    p2.push(this.texto('sacerdote delegado', 134, 356, 11.5, { alinear: 'centro' }));
+    p2.push(this.texto('Testigo', 263, 410, 11.5, { alinear: 'centro' }));
+    p2.push(this.texto('Testigo', 453, 410, 11.5, { alinear: 'centro' }));
+
+    titulo('INSCRIPCIÓN DEL MATRIMONIO CELEBRADO', 497);
+    p2.push(...this.lineaPuntos(['Este matrimonio ha quedado registrado en el libro', { v: '', w: .34 }, ' folio', { v: '', w: .3 }, ' número', { v: '' }], 517, { x0: X0, x1: X1, tam: 11.5 }));
+    p2.push(this.texto('de esta parroquia.', X0, 537, 11.5));
+    parroco(550);
+
+    titulo('NOTIFICACIÓN DE LA CELEBRACIÓN DEL MATRIMONIO', 648);
+    p2.push(...this.lineaPuntos(['Con fecha de', { v: '', w: .3 }, ' de', { v: '', w: .3 }, ' de', { v: '' }, ' se ha comunicado la celebración de este matri-'], 668, { x0: X0, x1: X1, tam: 11.5 }));
+    p2.push(this.texto('monio a las parroquias en las que fueron bautizados los contrayentes.', X0, 688, 11.5));
+    parroco(702);
+
+    return { paginas: [p1, p2] };
+  },
+
   /* Maqueta completa de un certificado */
   async maquetar(cert, datos, ctx, conFirma) {
     const cfg = ctx.config;
     const doc = cert.documento(datos, ctx);
+    if (doc.formato === 'alegato') return this.maquetarAlegato(datos, ctx);
     const color = cfg.color || '#a8322d';
     const IL = doc.interlinea || M.interlinea;
     const partida = doc.formato === 'partida';
@@ -293,17 +429,21 @@ const Motor = {
   },
 
   /* ---------- Dibujo en PDF ---------- */
-  async aPDF(ops, titulo) {
+  // ops: una página (lista de operaciones) o {paginas: [...]}
+  paginas(r) { return Array.isArray(r) ? [r] : r.paginas; },
+
+  async aPDF(resultado, titulo) {
     const { PDFDocument, StandardFonts, rgb } = PDFLib;
     const pdf = await PDFDocument.create();
     pdf.setTitle(titulo || 'Certificado');
     const f = { normal: await pdf.embedFont(StandardFonts.Helvetica), negrita: await pdf.embedFont(StandardFonts.HelveticaBold) };
-    const page = pdf.addPage([A4.w, A4.h]);
     const col = hex => {
       const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '#111111');
       return m ? rgb(parseInt(m[1], 16) / 255, parseInt(m[2], 16) / 255, parseInt(m[3], 16) / 255) : rgb(0, 0, 0);
     };
     const cache = new Map();
+    for (const ops of this.paginas(resultado)) {
+    const page = pdf.addPage([A4.w, A4.h]);
     for (const o of ops) {
       if (o.tipo === 'txt') page.drawText(o.t, { x: o.x, y: A4.h - o.y, size: o.tam, font: o.negrita ? f.negrita : f.normal, color: col(o.color) });
       else if (o.tipo === 'linea') page.drawLine({ start: { x: o.x1, y: A4.h - o.y1 }, end: { x: o.x2, y: A4.h - o.y2 }, thickness: o.grosor, color: col(o.color) });
@@ -315,6 +455,7 @@ const Motor = {
         }
         page.drawImage(cache.get(o.src), { x: o.x, y: A4.h - o.y - o.h, width: o.w, height: o.h });
       }
+    }
     }
     return pdf.save();
   }

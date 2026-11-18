@@ -40,6 +40,13 @@ const H = {
   novia(d) { return H.nombre(d, 'novia_nombre', 'novia_apellidos'); },
   // nacido / nacida, hijo / hija...
   g(d, masc, fem) { return d.sexo === 'F' ? fem : masc; },
+  edad(nac, refISO) {
+    const a = /^(\d{4})-(\d{2})-(\d{2})$/.exec(nac || ''), b = /^(\d{4})-(\d{2})-(\d{2})$/.exec(refISO || '');
+    if (!a || !b) return '';
+    let e = +b[1] - +a[1];
+    if (+b[2] < +a[2] || (+b[2] === +a[2] && +b[3] < +a[3])) e--;
+    return e >= 0 ? String(e) : '';
+  },
   anios(n) {
     const pal = ['cero','un','dos','tres','cuatro','cinco','seis','siete','ocho','nueve','diez'];
     const k = parseInt(n, 10);
@@ -251,7 +258,35 @@ const CERTIFICADOS = [
     }
   },
   { id: 'expediente', grupo: 'matrimonio', estado: 'pendiente', nombre: 'Expediente prematrimonial', titulo: 'Expediente prematrimonial', campos: [] },
-  { id: 'alegato', grupo: 'matrimonio', estado: 'pendiente', nombre: 'Alegato V', titulo: 'Alegato V', campos: [] },
+  {
+    id: 'alegato', grupo: 'matrimonio', estado: 'listo',
+    nombre: 'Alegato V', titulo: 'Alegato V · Autorización de matrimonio',
+    // Campos de cada contrayente: se muestran en dos columnas (El contrayente / La contrayente).
+    // La clave real es novio_<k> o novia_<k>, salvo que se indique otra.
+    camposPareja: [
+      { k: 'nombre', label: 'Nombre', w: 12 },
+      { k: 'apellido1', label: '1º Apellido', w: 6 }, { k: 'apellido2', label: '2º Apellido', w: 6 },
+      { k: 'lugar_nac', label: 'Lugar de nacimiento', w: 8, sep: true }, { k: 'f_nac', label: 'Fecha nacimiento', tipo: 'date', w: 4 },
+      { k: 'padre', label: 'Padre', w: 6, clave: lado => 'padre_' + lado }, { k: 'madre', label: 'Madre', w: 6, clave: lado => 'madre_' + lado },
+      { k: 'registro_civil', label: 'Registro civil', w: 12, sep: true },
+      { k: 'tomo_rc', label: 'Tomo reg. civil', w: 6 }, { k: 'pagina_rc', label: 'Página reg. civil', w: 6 },
+      { k: 'religion', label: 'Religión', w: 12 },
+      { k: 'f_bau', label: 'Fecha bautismo', tipo: 'date', w: 5, sep: true }, { k: 'ciudad_bau', label: 'Ciudad bautismo', w: 7 },
+      { k: 'parroquia_bau', label: 'Parroquia bautismo', w: 12 },
+      { k: 'diocesis_bau', label: 'Diócesis bautismo', w: 12 },
+      { k: 'libro_bau', label: 'Libro', w: 4 }, { k: 'folio_bau', label: 'Folio', w: 4 }, { k: 'num_bau', label: 'Número', w: 4 },
+      { k: 'estado_civil', label: 'Estado civil', w: 6, sep: true, ph: 'soltero/a' }, { k: 'nacionalidad', label: 'Nacionalidad', w: 6 },
+      { k: 'dni', label: 'DNI', w: 6 },
+      { k: 'domicilio', label: 'Domicilio', w: 12 },
+      { k: 'parroquia_domicilio', label: 'Parroquia domicilio', w: 12 },
+    ],
+    campos: [
+      { k: 'parroquia_boda', label: 'Parroquia de la boda', w: 8, sep: true },
+      { k: 'num_expediente', label: 'Nº expediente (Vicaría)', w: 4 },
+      { k: 'delegado', label: 'Sacerdote delegado (opcional)', ph: 'Rvdo. D. …', w: 12 },
+    ],
+    documento: () => ({ formato: 'alegato' })
+  },
   { id: 'amonestaciones', grupo: 'matrimonio', estado: 'pendiente', nombre: 'Amonestaciones activas', titulo: 'Amonestaciones activas', campos: [] },
   {
     id: 'exhorto', grupo: 'matrimonio', estado: 'listo',

@@ -14,6 +14,10 @@ const CONFIG_DEFECTO = {
   diocesis: 'Madrid',
   nombreCorto: '',
   papa: 'León XIV',
+  // Vicaría (para el Alegato V)
+  diocesisTitulo: 'Arzobispado de Madrid', logoDiocesis: '',
+  vicaria: '', vicario: '', vicarioCargo: 'Vicario Episcopal',
+  vicariaCalle: '', vicariaNumero: '', vicariaCP: '', vicariaCiudad: '', vicariaEmail: '', vicariaTelefono: '',
   color: '#a8322d',
   logo: '', sello: '',
   firmas: [
@@ -339,8 +343,16 @@ function vistaFormulario() {
   const cfg = estado.config;
   const opcFirmas = cfg.firmas.map((f, i) => `<option value="${i}" ${i === estado.firma ? 'selected' : ''}>${esc(f.nombre)} — ${esc(f.cargo)}</option>`).join('');
   cert.campos.forEach(c => { if (c.tipo === 'select' && !estado.registro[c.k]) estado.registro[c.k] = c.opciones[0]; });
-  const campos = cert.campos.length ? cert.campos.map(campoHTML).join('')
+  let campos = cert.campos.length ? cert.campos.map(campoHTML).join('')
     : '<p class="nota" style="grid-column:1/-1">Esta pantalla todavía no está hecha. Cuando me pases la captura y un PDF de ejemplo, la monto.</p>';
+  if (cert.camposPareja) {
+    const d = estado.registro;
+    // si solo se escribieron los apellidos juntos en otro certificado, se aprovechan
+    ['novio', 'novia'].forEach(l => { if (!d[l + '_apellido1'] && !d[l + '_apellido2'] && d[l + '_apellidos']) d[l + '_apellido1'] = d[l + '_apellidos']; });
+    const columna = (lado, titulo) => `<div class="columna-pareja"><h4>${titulo}</h4><div class="rejilla">${
+      cert.camposPareja.map(f => campoHTML({ ...f, k: f.clave ? f.clave(lado) : `${lado}_${f.k}` })).join('')}</div></div>`;
+    campos = `<div class="pareja">${columna('novio', 'El contrayente')}${columna('novia', 'La contrayente')}</div>` + campos;
+  }
 
   return `
   ${cabecera(esc(cert.titulo))}
@@ -376,9 +388,10 @@ function actualizarPrevia() {
       caja.innerHTML = `<div class="pendiente-aviso"><strong>Falta el modelo</strong>Pásame un PDF de ejemplo y lo dejo igual que el original.</div>`;
       return;
     }
-    const ops = await Motor.maquetar(cert, estado.registro, ctx(), true);
-    _ultimoSVG = Motor.aSVG(ops);
-    caja.innerHTML = _ultimoSVG + '<span class="lupa">⤢ Ampliar</span>';
+    const res = await Motor.maquetar(cert, estado.registro, ctx(), true);
+    const paginas = Motor.paginas(res).map(p => Motor.aSVG(p));
+    _ultimoSVG = paginas.join('');
+    caja.innerHTML = paginas[0] + `<span class="lupa">⤢ Ampliar</span>${paginas.length > 1 ? `<span class="n-paginas">${paginas.length} páginas</span>` : ''}`;
     const grande = $('#ampliada .hoja-grande'); if (grande) grande.innerHTML = _ultimoSVG;
   }, 60);
 }
@@ -394,8 +407,8 @@ function ctx() { return { config: estado.config, firmante: firmante(), fechaDocu
 
 async function crearPDF(conFirma) {
   const cert = CERTIFICADOS.find(c => c.id === estado.certId);
-  const ops = await Motor.maquetar(cert, estado.registro, ctx(), conFirma);
-  const bytes = await Motor.aPDF(ops, cert.titulo);
+  const res = await Motor.maquetar(cert, estado.registro, ctx(), conFirma);
+  const bytes = await Motor.aPDF(res, cert.titulo);
   const quien = tituloRegistro(actual()).replace('(registro vacío)', '');
   const nombre = `${cert.nombre}${quien ? ' - ' + quien : ''}.pdf`.replace(/[\\/:*?"<>|]/g, '');
   return { bytes, nombre, cert };
@@ -489,6 +502,15 @@ function vistaParroquia() {
         ${img('logo', 'Logo (arriba a la izquierda)', 'PNG o JPG.')}
         ${img('sello', 'Sello (junto a la firma)', 'Solo aparece en «PDF con firma».')}
       </div></div>
+      <div class="tarjeta"><h3>Vicaría (para el Alegato V)</h3><div class="rejilla">
+        ${inp('diocesisTitulo', 'Arzobispado / Obispado', 12, 'Arzobispado de Madrid')}
+        ${inp('vicaria', 'Nombre de la vicaría', 6, 'Vicaría I Norte')}${inp('vicario', 'Nombre del vicario', 6)}
+        ${inp('vicarioCargo', 'Cargo del vicario', 6, 'Vicario Episcopal')}${inp('vicariaTelefono', 'Teléfono', 6)}
+        ${inp('vicariaCalle', 'Calle', 9)}${inp('vicariaNumero', 'Nº', 3)}
+        ${inp('vicariaCP', 'C.P.', 3)}${inp('vicariaCiudad', 'Ciudad', 9)}
+        ${inp('vicariaEmail', 'Email', 12)}
+      </div>
+      <div class="campos" style="margin-top:12px">${img('logoDiocesis', 'Logo de la diócesis', 'Aparece arriba a la izquierda del Alegato V.')}</div></div>
     </div>
   </main>`;
 }
@@ -599,6 +621,8 @@ document.addEventListener('input', e => {
   if (el.dataset.k) {
     estado.registro[el.dataset.k] = el.value;
     if (el.dataset.k === 'nombre') sexoAutomatico();
+    const m = /^(novio|novia)_apellido[12]$/.exec(el.dataset.k);
+    if (m) estado.registro[m[1] + '_apellidos'] = [estado.registro[m[1] + '_apellido1'], estado.registro[m[1] + '_apellido2']].filter(x => x && x.trim()).join(' ');
     guardarRegistro(); actualizarPrevia();
   }
   else if (el.id === 'fechaDoc') { estado.fechaDocumento = el.value; actualizarPrevia(); }

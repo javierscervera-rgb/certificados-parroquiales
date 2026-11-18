@@ -26,7 +26,8 @@ Aplicación web para generar los certificados que se usan habitualmente en las p
 | Matrimonio | Bendición apostólica (boda, bodas de plata, bodas de oro) | ✅ |
 | Matrimonio | Comunicación de matrimonio (con tabla de trámites) | ✅ |
 | Matrimonio | Exhorto de amonestaciones (con certificación de la parroquia que publica) | ✅ |
-| Matrimonio | Expediente, Alegato V, amonestaciones activas, registro civil | ⏳ falta pantalla y modelo |
+| Matrimonio | Alegato V · Autorización de matrimonio (2 páginas, datos de la Vicaría) | ✅ |
+| Matrimonio | Expediente, amonestaciones activas, registro civil | ⏳ falta pantalla y modelo |
 | Confirmación | Certificado de confirmación | ✅ |
 | Confirmación | Comunicación de confirmación | ✅ |
 
