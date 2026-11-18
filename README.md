@@ -28,6 +28,7 @@ Aplicación web para generar los certificados que se usan habitualmente en las p
 | Matrimonio | Exhorto de amonestaciones (con certificación de la parroquia que publica) | ✅ |
 | Matrimonio | Alegato V · Autorización de matrimonio (2 páginas, datos de la Vicaría) | ✅ |
 | Matrimonio | Expediente matrimonial (11 páginas sobre el impreso oficial; completo o por partes: portada, novio, novia, testigo 1, testigo 2, diligencias) | ✅ |
+| Matrimonio | Partida de matrimonio (libro, folio y número del libro de matrimonios; ministro) | ✅ |
 | Matrimonio | Fe de vida y estado (novio y novia) · Atestado de libertad (desde el expediente) | ✅ |
 | Matrimonio | Amonestaciones activas, registro civil | ⏳ falta el modelo |
 | Confirmación | Certificado de confirmación | ✅ |

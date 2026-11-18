@@ -174,15 +174,16 @@ const Motor = {
 
   /* Columna izquierda de la partida de bautismo */
   margenPartida(m, y0) {
-    const ops = [], x = 24, ancho = 92;
+    const ops = [], x = 24, ancho = m.ancho || 92;
     let y = y0;
     const grupo = (lineas, tam, lead, negrita = false) => {
       lineas.forEach(l => this.cortar(l, tam, ancho, negrita).forEach(t => { ops.push(this.texto(t, x, y, tam, { negrita })); y += lead; }));
     };
-    grupo(m.parroquia, 7.5, 10); y += 6;
-    m.lugar.forEach(l => { grupo([l], 7.5, 10); y += 6; });
-    y += 6; grupo(m.libro, 9.5, 12); y += 12;
-    grupo(['NOTAS:'], 9.5, 12); y += 8;
+    const tam = m.tam || 7.5, lead = m.lead || 10;
+    grupo(m.parroquia, tam, lead); y += 6;
+    m.lugar.forEach(l => { grupo([l], tam, lead); y += 6; });
+    y += 6; grupo(m.libro, Math.max(tam, 9.5), Math.max(lead, 12)); y += 12;
+    grupo([m.etiquetaNotas || 'NOTAS:'], Math.max(tam, 9.5), Math.max(lead, 12)); y += 8;
     if (m.notas) grupo([m.notas], 8.5, 11);
     return { ops, y };
   },
@@ -465,7 +466,7 @@ const Motor = {
     const color = cfg.color || '#a8322d';
     const IL = doc.interlinea || M.interlinea;
     const partida = doc.formato === 'partida';
-    const cuerpo = partida ? { x0: 140, x1: 545, tam: 10.5, interlinea: 14, justificar: false } : { interlinea: IL, ...(doc.cuerpo || {}) };
+    const cuerpo = partida ? { x0: 140, x1: 545, tam: 10.5, interlinea: 14, justificar: false, ...(doc.cuerpo || {}) } : { interlinea: IL, ...(doc.cuerpo || {}) };
     const ops = [];
 
     // --- Cabecera
@@ -511,7 +512,7 @@ const Motor = {
     if (partida) {
       const r = this.margenPartida(doc.margen, yCuerpo - 2);
       ops.push(...r.ops);
-      ops.push({ tipo: 'linea', x1: 128, y1: yCuerpo - 14, x2: 128, y2: Math.max(y, r.y) + 20, color: '#bbbbbb', grosor: 0.6 });
+      ops.push({ tipo: 'linea', x1: doc.margen.linea || 128, y1: yCuerpo - 14, x2: doc.margen.linea || 128, y2: Math.max(y, r.y) + 20, color: '#bbbbbb', grosor: 0.6 });
     }
 
     // --- Cierre y firma (se compacta si el texto es largo)

@@ -323,6 +323,54 @@ const CERTIFICADOS = [
     }
   },
   {
+    id: 'partida_matrimonio', grupo: 'matrimonio', estado: 'listo',
+    nombre: 'Partida de matrimonio', titulo: 'Partida de matrimonio',
+    // Nombres, padres y lugar de nacimiento: los mismos campos del expediente y el Alegato V.
+    // Libro, folio y número son los del libro de matrimonios (no los del bautismo).
+    campos: [
+      C.novio_nombre, C.novio_apellidos, { k: 'novio_lugar_nac', label: 'Lugar de nacimiento', w: 3 },
+      { k: 'novio_padre_nombre', label: 'Nombre del padre', w: 4, nueva: true }, { k: 'novio_madre_nombre', label: 'Nombre de la madre', w: 4 },
+      { ...C.novia_nombre, sep: true }, C.novia_apellidos, { k: 'novia_lugar_nac', label: 'Lugar de nacimiento', w: 3 },
+      { k: 'novia_padre_nombre', label: 'Nombre del padre', w: 4, nueva: true }, { k: 'novia_madre_nombre', label: 'Nombre de la madre', w: 4 },
+      { ...C.f_mat, sep: true }, { k: 'ministro_mat', label: 'Ministro del matrimonio', ph: 'D. Hipólito Tamayo Zúñiga, párroco', w: 9 },
+      { k: 'libro_mat', label: 'Libro', w: 2, nueva: true }, { k: 'folio_mat', label: 'Folio', w: 2 }, { k: 'num_mat', label: 'Número', w: 2 },
+      { k: 'notas_mat', label: 'Notas marginales', tipo: 'textarea', w: 12, sep: true }],
+    documento: (d, ctx) => {
+      const f = ctx.firmante || {}, cfg = ctx.config;
+      const nombreParroquia = (cfg.nombre || '').replace(/^parroquia( de)?\s+/i, '');
+      const padres = l => {
+        const p = (d[l + '_padre_nombre'] || '').trim(), m = (d[l + '_madre_nombre'] || '').trim();
+        return p || m ? `, ${l === 'novio' ? 'hijo' : 'hija'} de ${H.t(p)} y ${H.t(m)}` : '';
+      };
+      const lugar = l => `, ${l === 'novio' ? 'nacido' : 'nacida'} en ${H.t(d[l + '_lugar_nac'])}`;
+      return {
+        titulo: 'CERTIFICADO DE MATRIMONIO',
+        formato: 'partida',
+        cuerpo: { x0: 158, tam: 11.5, interlinea: 16, justificar: true },
+        margen: {
+          tam: 11, lead: 14, ancho: 112, linea: 146,
+          parroquia: [`Diócesis de ${cfg.diocesis || '___'}`],
+          lugar: [`Parroquia ${nombreParroquia}`, `Población ${cfg.localidad || '___'}`, `Diócesis de ${cfg.diocesis || '___'}`, `Provincia de ${cfg.provincia || '___'}`],
+          libro: [`Libro: ${H.t(d.libro_mat, '___')}`, `Folio: ${H.t(d.folio_mat, '___')}`, `Nº: ${H.t(d.num_mat, '___')}`],
+          etiquetaNotas: 'Notas:',
+          notas: d.notas_mat || ''
+        },
+        bloques: [
+          { p: `Don ${H.t(f.nombre)}, ${H.t(f.cargo, '').toLowerCase()} de esta parroquia` },
+          { linea: '**CERTIFICA**' },
+          { p: 'Que según consta en el acta reseñada al margen, correspondiente al libro de Matrimonios, han contraído matrimonio canónico:' },
+          { p: `D. **${H.novio(d)}**${padres('novio')}${lugar('novio')},` },
+          { linea: 'con' },
+          { p: `Dña. **${H.novia(d)}**${padres('novia')}${lugar('novia')}.` },
+          { p: `EL MATRIMONIO SE CELEBRÓ en la Parroquia de ${H.t(nombreParroquia)} el día ${H.fechaLarga(d.f_mat)}.` },
+          { p: `Celebró dicho matrimonio ${H.t(d.ministro_mat)}.` },
+          { linea: 'De lo que doy fe.', espacio: 1 },
+        ],
+        cierre: null, firmaEspacio: 6
+      };
+    }
+  },
+  {
     id: 'bendicion', grupo: 'matrimonio', estado: 'listo',
     nombre: 'Bendición apostólica boda',
     titulo: 'Bendición apostólica del Papa para el matrimonio',
