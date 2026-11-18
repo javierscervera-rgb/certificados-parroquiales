@@ -21,8 +21,8 @@ Aplicación web para generar los certificados que se usan habitualmente en las p
 | Bautismo | Autorización para bautizar fuera de la parroquia | ✅ |
 | Bautismo | Certificado para ser padrino/madrina | ✅ |
 | Matrimonio | Cursillo prematrimonial | ✅ |
-| Matrimonio | Celebración del matrimonio (boda que se va a realizar) | ✅ |
-| Matrimonio | Certificado de matrimonio | ✅ |
+| Matrimonio | Certificado matrimonio futuro (boda que se va a realizar) | ✅ |
+| Matrimonio | Certificado matrimonio realizado | ✅ |
 | Matrimonio | Bendición apostólica (boda, bodas de plata, bodas de oro) | ✅ |
 | Matrimonio | Comunicación de matrimonio (con tabla de trámites) | ✅ |
 | Matrimonio | Exhorto de amonestaciones (con certificación de la parroquia que publica) | ✅ |

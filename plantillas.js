@@ -194,7 +194,7 @@ const CERTIFICADOS = [
   },
   {
     id: 'boda', grupo: 'matrimonio', estado: 'listo',
-    nombre: 'Certificado de boda', titulo: 'Certificado de boda que se va a realizar aquí',
+    nombre: 'Certificado matrimonio futuro', titulo: 'Certificado de boda que se va a realizar aquí',
     campos: [C.novio_nombre, C.novio_apellidos, C.novia_nombre, C.novia_apellidos,
       con(C.f_mat, { label: 'Fecha boda' }), { k: 'hora_boda', label: 'Hora de la boda', tipo: 'time', w: 2 }],
     documento: (d) => ({
@@ -210,7 +210,7 @@ const CERTIFICADOS = [
   },
   {
     id: 'matrimonio', grupo: 'matrimonio', estado: 'listo',
-    nombre: 'Certificado de matrimonio', titulo: 'Certificado de matrimonio realizado aquí',
+    nombre: 'Certificado matrimonio realizado', titulo: 'Certificado de matrimonio realizado aquí',
     campos: [C.novio_nombre, C.novio_apellidos, { k: 'novio_dni', label: 'DNI novio', w: 3 },
       C.novia_nombre, C.novia_apellidos, { k: 'novia_dni', label: 'DNI novia', w: 3 }, C.f_mat],
     documento: (d, ctx) => {
@@ -231,13 +231,14 @@ const CERTIFICADOS = [
     nombre: 'Bendición apostólica boda',
     titulo: 'Bendición apostólica del Papa para el matrimonio',
     campos: [{ k: 'motivo_bendicion', label: 'Motivo', tipo: 'select', opciones: ['Matrimonio', 'Bodas de plata', 'Bodas de oro'], w: 4 },
+      { k: 'nuncio', label: 'Nombre del nuncio', ph: 'D. …', w: 8 },
       C.novio_nombre, C.novio_apellidos, C.novia_nombre, C.novia_apellidos, C.f_mat],
     documento: (d, ctx) => {
       const aniversario = d.motivo_bendicion && d.motivo_bendicion !== 'Matrimonio';
       const lugar = `${H.t(ctx.config.nombre)} (${H.t(ctx.config.localidad)})`;
       return {
         destinatario: ['Excmo. y Rvdmo. Sr. Nuncio Apostólico', 'Nunciatura Apostólica en España', 'Pío XII, 46'],
-        saludo: 'Excmo. y Rvdmo. Sr.:',
+        saludo: `Excmo. y Rvdmo. Sr.${d.nuncio && d.nuncio.trim() ? ' ' + d.nuncio.trim() : ''}:`,
         bloques: [
           { p: `Con ocasión ${aniversario ? `de las ${d.motivo_bendicion.toLowerCase()} de un matrimonio` : 'del matrimonio de unos novios'} de nuestra parroquia quisiera solicitarle la Bendición Apostólica de S. S. ${H.t(ctx.config.papa, '________')} para ese día dirigida a ellos y a todos los participantes en la celebración.`, sangria: true },
           { p: `Nombre del contrayente: ${H.novio(d)}`, espacio: 2 },
