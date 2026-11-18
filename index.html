@@ -245,6 +245,18 @@
     .icono { width: 56px; height: 56px; }
     .icono svg { width: 32px; height: 32px; }
   }
+
+  /* ---------- IMPRESIÓN: solo el certificado, nunca la pantalla ---------- */
+  #zonaImpresion { display: none; }
+  @page { size: A4; margin: 0; }
+  @media print {
+    html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; zoom: 1 !important; }
+    body > *:not(#zonaImpresion) { display: none !important; }
+    #zonaImpresion { display: block !important; }
+    .hoja-impresion { width: 210mm; height: 297mm; overflow: hidden; page-break-after: always; break-after: page; }
+    .hoja-impresion:last-child { page-break-after: auto; break-after: auto; }
+    .hoja-impresion svg { width: 210mm; height: 297mm; display: block; }
+  }
 </style>
 </head>
 <body>

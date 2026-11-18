@@ -424,29 +424,27 @@ async function crearPDF(conFirma) {
 }
 
 /* Imprimir: abre directamente la ventana de impresión del navegador con el certificado,
-   sin descargar ningún archivo. Se imprime la misma imagen que la vista previa. */
+   sin descargar ningún archivo. Mientras se imprime, la página oculta la aplicación y
+   deja solo las hojas del certificado (funciona igual en Chrome, Safari, Firefox e iPhone). */
 async function imprimir(conFirma) {
   const cert = CERTIFICADOS.find(c => c.id === estado.certId);
   const res = await Motor.maquetar(cert, estado.registro, ctx(), conFirma);
-  const hojas = Motor.paginas(res).map(p => Motor.aSVG(p)).join('');
-  document.getElementById('marcoImpresion')?.remove();
-  const marco = document.createElement('iframe');
-  marco.id = 'marcoImpresion';
-  marco.setAttribute('aria-hidden', 'true');
-  marco.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none';
-  marco.srcdoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(cert.nombre)}</title><style>
-    @page { size: A4; margin: 0; }
-    html, body { margin: 0; padding: 0; background: #fff; }
-    svg { display: block; width: 210mm; height: 297mm; page-break-after: always; break-after: page; }
-    svg:last-child { page-break-after: auto; break-after: auto; }
-  </style></head><body>${hojas}</body></html>`;
-  marco.onload = () => {
-    setTimeout(() => {
-      try { marco.contentWindow.focus(); marco.contentWindow.print(); }
-      catch (e) { aviso('No se pudo abrir la impresión. Usa «Descargar PDF».'); }
-    }, 150);
-  };
-  document.body.appendChild(marco);
+  const hojas = Motor.paginas(res).map(p => `<div class="hoja-impresion">${Motor.aSVG(p)}</div>`).join('');
+  document.getElementById('zonaImpresion')?.remove();
+  const zona = document.createElement('div');
+  zona.id = 'zonaImpresion';
+  zona.innerHTML = hojas;
+  document.body.appendChild(zona);
+  document.body.classList.add('imprimiendo');
+  const tituloAntes = document.title;
+  document.title = cert.nombre + (tituloRegistro(actual()) !== '(registro vacío)' ? ' - ' + tituloRegistro(actual()) : '');
+  const limpiar = () => { document.body.classList.remove('imprimiendo'); zona.remove(); document.title = tituloAntes; window.removeEventListener('afterprint', limpiar); };
+  window.addEventListener('afterprint', limpiar);
+  // las imágenes (logo, sello, firma) deben estar cargadas antes de imprimir
+  await Promise.all([...zona.querySelectorAll('image')].map(im => new Promise(r => { const i = new Image(); i.onload = i.onerror = r; i.src = im.getAttribute('href'); })));
+  await new Promise(r => setTimeout(r, 50));
+  window.print();
+  setTimeout(() => { if (document.body.classList.contains('imprimiendo') && !window.matchMedia('print').matches) limpiar(); }, 60000);
 }
 
 async function descargarPDF(conFirma) {
