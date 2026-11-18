@@ -34,14 +34,20 @@
     text-transform: uppercase; font-size: clamp(20px, 2.6vw, 32px); margin: 0; line-height: 1.15;
   }
   .marca { display: flex; align-items: center; gap: 14px; flex: 1 1 320px; min-width: 0; }
-  .marca .logo { flex: none; width: 46px; height: 46px; border-radius: 10px; background: #fff; display: grid; place-items: center; overflow: hidden; padding: 3px; }
+  .marca { flex-direction: column; align-items: flex-start; gap: 2px; justify-content: center; }
+  .marca-inicio { display: flex; align-items: center; gap: 10px; background: none; border: 0; padding: 0; color: inherit; text-align: left; min-width: 0; max-width: 100%; border-radius: 8px; }
+  .marca-inicio:hover .parroquia { color: #fff; }
+  .marca-inicio:hover .logo { box-shadow: 0 0 0 2px var(--oro); }
+  .marca .logo { flex: none; width: 34px; height: 34px; border-radius: 10px; background: #fff; display: grid; place-items: center; overflow: hidden; padding: 3px; }
   .marca .logo img { max-width: 100%; max-height: 100%; }
   .marca-txt { min-width: 0; }
   .marca .parroquia { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #b9b3a5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .cab-der { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
   /* Portada: nombre y logo de la parroquia en grande */
   header.portada { padding: 22px 28px; min-height: 120px; }
-  header.portada .marca { gap: 20px; }
+  header.portada .marca { flex-direction: column; gap: 6px; }
+  header.portada .marca-inicio { gap: 20px; }
+  header.portada .marca-inicio:has(.logo) + h1 { padding-left: 104px; margin-top: -26px; }
   header.portada .logo { width: 84px; height: 84px; border-radius: 14px; padding: 5px; }
   header.portada .parroquia { font-family: 'EB Garamond', Georgia, serif; font-size: clamp(24px, 3.4vw, 40px); letter-spacing: .02em; text-transform: none; color: #f3ecdc; white-space: normal; line-height: 1.1; }
   header.portada h1 { font-family: Inter, system-ui, sans-serif; font-size: 13px; letter-spacing: .22em; color: var(--oro); font-weight: 600; margin-top: 6px; }
@@ -140,6 +146,9 @@
   .hoja-grande svg { width: min(66.4vh, calc(100vw - 40px)); height: auto; display: block; box-shadow: 0 10px 40px rgba(0,0,0,.4); }
   .modal .cerrar { position: fixed; top: 16px; right: 16px; width: 40px; height: 40px; border-radius: 50%; border: 0; background: #fff; font-size: 18px; }
 
+  .descargas { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--suave); flex-wrap: wrap; }
+  .descargas span { flex: 1 0 100%; }
+  .descargas .btn { flex: 1; padding: 6px 8px; font-size: 12px; }
   .acc { display: flex; align-items: center; gap: 10px; text-align: left; background: #fff; border: 1px solid var(--borde); border-radius: 10px; padding: 11px 12px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--tinta); }
   .acc:hover:not(:disabled) { border-color: var(--azul-2); }
   .acc svg { width: 22px; height: 22px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.6; }
@@ -217,6 +226,7 @@
     .botonera .peligro { grid-column: 1 / -1; }
     header.barra, header.portada { padding: 14px 16px; }
     header.portada .logo { width: 60px; height: 60px; }
+    header.portada .marca-inicio:has(.logo) + h1 { padding-left: 0; margin-top: 4px; }
     .cab-der { justify-content: flex-start; }
     .chip { max-width: 100%; }
     .grupo > div:first-child { display: flex; align-items: center; gap: 12px; }

@@ -219,6 +219,7 @@ const IC = {
   nuevo: '<svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M12 11v6M9 14h6"/></svg>',
   pdf: '<svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M12 10v7M9 14l3 3 3-3"/></svg>',
   pluma: '<svg viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M14 4l4 4-9 9H5v-4z"/></svg>',
+  imprimir: '<svg viewBox="0 0 24 24"><path d="M7 9V3h10v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/></svg>',
   mail: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>',
   buscar: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>',
   ant: '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
@@ -262,7 +263,7 @@ function cabecera(titulo, derecha = '', portada = false) {
   const c = estado.config;
   const logo = c.logo ? `<span class="logo"><img src="${c.logo}" alt=""></span>` : '';
   return `<header class="barra ${portada ? 'portada' : ''}">
-    <div class="marca">${logo}<div class="marca-txt"><div class="parroquia">${esc(c.nombre || '')}</div><h1>${titulo}</h1></div></div>
+    <div class="marca"><button class="marca-inicio" data-ir="menu" title="Volver a la pantalla de inicio">${logo}<span class="parroquia">${esc(c.nombre || '')}</span></button><h1>${titulo}</h1></div>
     <div class="cab-der"><span data-chip>${chipDrive()}</span>${derecha}</div>
   </header>`;
 }
@@ -370,8 +371,9 @@ function vistaFormulario() {
         <button class="acc" data-ir="menu">${IC.menu}Menú principal</button>
         <button class="acc" data-registro="nuevo">${IC.nuevo}Nuevo registro</button>
         <button class="miniatura" id="previa" title="Pulsa para ampliar" ${listo ? '' : 'disabled'}></button>
-        <button class="acc prim" data-pdf="1" ${listo ? '' : 'disabled'}>${IC.pluma}<span>PDF con firma<small>Con sello y firma escaneada</small></span></button>
-        <button class="acc" data-pdf="0" ${listo ? '' : 'disabled'}>${IC.pdf}<span>PDF sin firma<small>Para firmar a mano</small></span></button>
+        <button class="acc prim" data-imprimir="1" ${listo ? '' : 'disabled'}>${IC.imprimir}<span>Imprimir con firma<small>Con sello y firma escaneada</small></span></button>
+        <button class="acc" data-imprimir="0" ${listo ? '' : 'disabled'}>${IC.imprimir}<span>Imprimir sin firma<small>Para firmar a mano</small></span></button>
+        <div class="descargas"><span>Descargar PDF:</span><button class="btn" data-pdf="1" ${listo ? '' : 'disabled'}>con firma</button><button class="btn" data-pdf="0" ${listo ? '' : 'disabled'}>sin firma</button></div>
         <button class="acc" data-correo ${listo ? '' : 'disabled'}>${IC.mail}<span>Enviar por mail<small>PDF adjunto, desde tu Gmail</small></span></button>
       </div>
     </div>
@@ -412,6 +414,32 @@ async function crearPDF(conFirma) {
   const quien = tituloRegistro(actual()).replace('(registro vacío)', '');
   const nombre = `${cert.nombre}${quien ? ' - ' + quien : ''}.pdf`.replace(/[\\/:*?"<>|]/g, '');
   return { bytes, nombre, cert };
+}
+
+/* Imprimir: abre directamente la ventana de impresión del navegador con el certificado,
+   sin descargar ningún archivo. Se imprime la misma imagen que la vista previa. */
+async function imprimir(conFirma) {
+  const cert = CERTIFICADOS.find(c => c.id === estado.certId);
+  const res = await Motor.maquetar(cert, estado.registro, ctx(), conFirma);
+  const hojas = Motor.paginas(res).map(p => Motor.aSVG(p)).join('');
+  document.getElementById('marcoImpresion')?.remove();
+  const marco = document.createElement('iframe');
+  marco.id = 'marcoImpresion';
+  marco.setAttribute('aria-hidden', 'true');
+  marco.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none';
+  marco.srcdoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(cert.nombre)}</title><style>
+    @page { size: A4; margin: 0; }
+    html, body { margin: 0; padding: 0; background: #fff; }
+    svg { display: block; width: 210mm; height: 297mm; page-break-after: always; break-after: page; }
+    svg:last-child { page-break-after: auto; break-after: auto; }
+  </style></head><body>${hojas}</body></html>`;
+  marco.onload = () => {
+    setTimeout(() => {
+      try { marco.contentWindow.focus(); marco.contentWindow.print(); }
+      catch (e) { aviso('No se pudo abrir la impresión. Usa «Descargar PDF».'); }
+    }, 150);
+  };
+  document.body.appendChild(marco);
 }
 
 async function descargarPDF(conFirma) {
@@ -580,6 +608,11 @@ document.addEventListener('click', async e => {
     else if (a === 'reconectar') Google.reconectar();
     else if (a === 'desconectar') { if (await confirmar('¿Desconectar Google Drive en este navegador? Los datos siguen guardados en tu Drive.', 'Desconectar')) Google.desconectar(); }
     else if (a === 'menu') menuDrive();
+  }
+  else if (t.dataset.imprimir) {
+    t.disabled = true;
+    try { await imprimir(t.dataset.imprimir === '1'); } catch (err) { console.error(err); aviso('No se pudo preparar la impresión.'); }
+    t.disabled = false;
   }
   else if (t.dataset.pdf) {
     t.disabled = true;
