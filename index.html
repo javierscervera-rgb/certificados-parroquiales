@@ -253,9 +253,10 @@
     html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; zoom: 1 !important; }
     body > *:not(#zonaImpresion) { display: none !important; }
     #zonaImpresion { display: block !important; }
-    .hoja-impresion { width: 210mm; height: 297mm; overflow: hidden; page-break-after: always; break-after: page; }
-    .hoja-impresion:last-child { page-break-after: auto; break-after: auto; }
-    .hoja-impresion svg { width: 210mm; height: 297mm; display: block; }
+    /* 1 mm menos que el A4 para que el redondeo del navegador nunca cree una hoja en blanco */
+    .hoja-impresion { width: 210mm; height: 296mm; overflow: hidden; }
+    .hoja-impresion + .hoja-impresion { break-before: page; page-break-before: always; }
+    .hoja-impresion svg { width: 210mm; height: 296mm; display: block; }
   }
 </style>
 </head>

@@ -423,28 +423,50 @@ async function crearPDF(conFirma) {
   return { bytes, nombre, cert };
 }
 
-/* Imprimir: abre directamente la ventana de impresión del navegador con el certificado,
-   sin descargar ningún archivo. Mientras se imprime, la página oculta la aplicación y
-   deja solo las hojas del certificado (funciona igual en Chrome, Safari, Firefox e iPhone). */
+/* Imprimir: abre directamente la ventana de impresión con el certificado, sin descargar nada.
+   - Chrome, Edge y Firefox: se imprime el propio PDF del certificado (tamaño exacto, sin
+     encabezados ni pies de página del navegador, sin hojas de más).
+   - Safari (Mac, iPhone, iPad): se imprimen las hojas del certificado como página, ocultando
+     la aplicación, porque Safari no imprime bien un PDF incrustado. */
+const esSafari = /^((?!chrome|chromium|android|crios|fxios|edg).)*safari/i.test(navigator.userAgent) || /iP(hone|ad|od)/.test(navigator.userAgent);
+
 async function imprimir(conFirma) {
   const cert = CERTIFICADOS.find(c => c.id === estado.certId);
   const res = await Motor.maquetar(cert, estado.registro, ctx(), conFirma);
-  const hojas = Motor.paginas(res).map(p => `<div class="hoja-impresion">${Motor.aSVG(p)}</div>`).join('');
+  const nombre = cert.nombre + (tituloRegistro(actual()) !== '(registro vacío)' ? ' - ' + tituloRegistro(actual()) : '');
+  if (!esSafari) return imprimirPDF(await Motor.aPDF(res, nombre));
+  return imprimirHojas(Motor.paginas(res), nombre);
+}
+
+function imprimirPDF(bytes) {
+  document.getElementById('marcoImpresion')?.remove();
+  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+  const marco = document.createElement('iframe');
+  marco.id = 'marcoImpresion';
+  marco.setAttribute('aria-hidden', 'true');
+  marco.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none';
+  marco.onload = () => setTimeout(() => {
+    try { marco.contentWindow.focus(); marco.contentWindow.print(); }
+    catch (e) { window.open(url, '_blank'); } // si el navegador no lo permite, se abre el PDF para imprimirlo desde ahí
+  }, 250);
+  marco.src = url;
+  document.body.appendChild(marco);
+  setTimeout(() => URL.revokeObjectURL(url), 10 * 60000);
+}
+
+async function imprimirHojas(paginas, titulo) {
   document.getElementById('zonaImpresion')?.remove();
   const zona = document.createElement('div');
   zona.id = 'zonaImpresion';
-  zona.innerHTML = hojas;
+  zona.innerHTML = paginas.map(p => `<div class="hoja-impresion">${Motor.aSVG(p)}</div>`).join('');
   document.body.appendChild(zona);
-  document.body.classList.add('imprimiendo');
   const tituloAntes = document.title;
-  document.title = cert.nombre + (tituloRegistro(actual()) !== '(registro vacío)' ? ' - ' + tituloRegistro(actual()) : '');
-  const limpiar = () => { document.body.classList.remove('imprimiendo'); zona.remove(); document.title = tituloAntes; window.removeEventListener('afterprint', limpiar); };
+  document.title = titulo;
+  const limpiar = () => { zona.remove(); document.title = tituloAntes; window.removeEventListener('afterprint', limpiar); };
   window.addEventListener('afterprint', limpiar);
-  // las imágenes (logo, sello, firma) deben estar cargadas antes de imprimir
   await Promise.all([...zona.querySelectorAll('image')].map(im => new Promise(r => { const i = new Image(); i.onload = i.onerror = r; i.src = im.getAttribute('href'); })));
   await new Promise(r => setTimeout(r, 50));
   window.print();
-  setTimeout(() => { if (document.body.classList.contains('imprimiendo') && !window.matchMedia('print').matches) limpiar(); }, 60000);
 }
 
 async function descargarPDF(conFirma) {
