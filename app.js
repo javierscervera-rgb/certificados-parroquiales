@@ -328,6 +328,61 @@ function vistaMenu() {
 }
 
 /* ---------------- PANTALLA DE DATOS ---------------- */
+/* Límite de caracteres de cada dato que va sobre una línea de puntos del expediente.
+   Se calcula con el largo de la línea a 9 pt (Helvetica: 0,46 del tamaño por carácter de media). */
+let _limites = null;
+function limites() {
+  if (_limites || typeof EXPEDIENTE === 'undefined') return _limites || {};
+  const POR_CARACTER = 0.46 * 9;
+  const cabe = (x, x1, lineas = 1) => Math.floor((x1 - x) * lineas * (lineas > 1 ? 0.93 : 1) / POR_CARACTER);
+  const m = {};
+  const pref = { novio: 'novio_ex_', novia: 'novia_ex_', t1: 't1_', t2: 't2_' };
+  Object.entries(EXPEDIENTE.examen).forEach(([q, campos]) => Object.entries(campos).forEach(([k, p]) => {
+    if (k === 'firma' || k === 'juramento') return;
+    m[pref[q] + k] = cabe(p[1], p[3] || 548, p[4] || 1);
+  }));
+  Object.entries(EXPEDIENTE.datos).forEach(([k, [izq, der]]) => {
+    if (/^f_/.test(k)) return;
+    if (k === 'padre' || k === 'madre') {
+      // nombre y apellidos van en la misma línea: el límite es conjunto
+      ['novio', 'novia'].forEach((l, j) => {
+        const pos = j ? der : izq, cap = cabe(pos[0], pos[2] || (j ? 548 : 300));
+        m[`${l}_${k}_nombre`] = m[`${l}_${k}_apellidos`] = { cap, par: [`${l}_${k}_nombre`, `${l}_${k}_apellidos`] };
+      });
+      return;
+    }
+    m['novio_' + k] = cabe(izq[0], izq[2] || 300, izq[3] || 1);
+    m['novia_' + k] = cabe(der[0], der[2] || 548, der[3] || 1);
+  });
+  Object.assign(m, {
+    parroquia_boda: cabe(74, 548) - 12, domicilio_boda: cabe(74, 548), num_expediente: cabe(400, 487),
+    proclamas_parroquias: cabe(68, 548), dispensa_motivo: cabe(408, 548) + cabe(68, 548),
+    otra_parroquia: cabe(364, 548, 2), motivo_otra_parroquia: cabe(257, 548),
+  });
+  return (_limites = m);
+}
+// Límite y caracteres usados de un campo (los que comparten línea cuentan juntos, con el espacio entre ellos)
+function cuentaDe(k) {
+  const l = limites()[k];
+  if (!l) return null;
+  if (typeof l === 'number') { const n = String(estado.registro[k] ?? '').length; return { usado: n, cap: l, max: l }; }
+  const [a, b] = l.par.map(x => String(estado.registro[x] ?? '').trim().length);
+  const usado = a + b + (a && b ? 1 : 0), propio = k === l.par[0] ? a : b;
+  return { usado, cap: l.cap, max: Math.max(propio, l.cap - (usado - propio) - (usado - propio ? 1 : 0)), par: l.par };
+}
+function contadorHTML(k) {
+  const c = cuentaDe(k);
+  return c ? `<span class="contador-c ${c.usado >= c.cap ? 'lleno' : ''}" data-cuenta="${k}">${c.usado}/${c.cap}</span>` : '';
+}
+function refrescarContador(k) {
+  const c = cuentaDe(k); if (!c) return;
+  (c.par || [k]).forEach(x => {
+    const cx = cuentaDe(x), span = document.querySelector(`[data-cuenta="${x}"]`), el = document.getElementById('c_' + x);
+    if (span) { span.textContent = `${cx.usado}/${cx.cap}`; span.classList.toggle('lleno', cx.usado >= cx.cap); }
+    if (el) el.maxLength = cx.max;
+  });
+}
+
 function campoHTML(c) {
   const v = estado.registro[c.k] ?? '';
   const id = 'c_' + c.k;
@@ -335,11 +390,12 @@ function campoHTML(c) {
   if (c.tipo === 'sexo') {
     const s = v || 'M';
     ctl = `<div class="sexo" data-sexo><button type="button" data-v="M" class="${s === 'M' ? 'on' : ''}">Varón</button><button type="button" data-v="F" class="${s === 'F' ? 'on' : ''}">Mujer</button></div>`;
-  } else if (c.tipo === 'textarea') ctl = `<textarea id="${id}" data-k="${c.k}" rows="3">${esc(v)}</textarea>`;
+  } else if (c.tipo === 'textarea') ctl = `<textarea id="${id}" data-k="${c.k}" rows="3" ${cuentaDe(c.k) ? `maxlength="${cuentaDe(c.k).max}"` : ''}>${esc(v)}</textarea>`;
   else if (c.tipo === 'select') ctl = `<select id="${id}" data-k="${c.k}">${c.opciones.map((o, i) => `<option ${o === v || (!v && i === 0) ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
-  else ctl = `<input id="${id}" data-k="${c.k}" type="${c.tipo || 'text'}" value="${esc(v)}" placeholder="${esc(c.ph || '')}" autocomplete="off">`;
+  else ctl = `<input id="${id}" data-k="${c.k}" type="${c.tipo || 'text'}" value="${esc(v)}" placeholder="${esc(c.ph || '')}" autocomplete="off" ${cuentaDe(c.k) && (!c.tipo || c.tipo === 'text' || c.tipo === 'tel') ? `maxlength="${cuentaDe(c.k).max}"` : ''}>`;
   const estilo = `grid-column:${c.nueva ? '1 / ' : ''}span ${c.w || 6}`;
-  return `${c.sep ? '<hr class="sep">' : ''}<div class="campo" style="${estilo}"><label for="${id}">${esc(c.label)}</label>${ctl}</div>`;
+  const cuenta = c.tipo === 'date' || c.tipo === 'select' || c.tipo === 'sexo' ? '' : contadorHTML(c.k);
+  return `${c.sep ? '<hr class="sep">' : ''}<div class="campo${cuenta ? ' con-contador' : ''}" style="${estilo}"><label for="${id}">${esc(c.label)}</label>${ctl}${cuenta}</div>`;
 }
 
 function vistaFormulario() {
@@ -896,6 +952,12 @@ function sexoAutomatico() {
 
 document.addEventListener('input', e => {
   const el = e.target;
+  if (el.dataset.k && cuentaDe(el.dataset.k)) {
+    const max = cuentaDe(el.dataset.k).max;
+    if (el.value.length > max) el.value = el.value.slice(0, max);
+    estado.registro[el.dataset.k] = el.value;
+    refrescarContador(el.dataset.k);
+  }
   if (el.dataset.k) {
     estado.registro[el.dataset.k] = el.value;
     if (el.dataset.k === 'nombre') sexoAutomatico();
