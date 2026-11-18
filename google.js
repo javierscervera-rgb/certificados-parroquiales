@@ -228,13 +228,22 @@ const Google = (() => {
   }
 
   async function descargarYUnir() {
+    const inicio = st.cambios || 0;
     const local = proveedor.obtenerDatos();
     const remotos = await leerRegistros();
-    const registros = unirRegistros(local.registros, remotos);
+    let registros = unirRegistros(local.registros, remotos);
     let config = local.config;
     if (st.ids.config) {
       const remota = await leerJSON(st.ids.config);
       if (remota && remota.nombre !== undefined) config = remota;
+      // Si mientras se descargaba se cambió algo aquí (p. ej. se cargó el sello al volver del
+      // selector de archivos), manda lo de aquí: no se pisa con la copia de Drive, que es anterior.
+      if ((st.cambios || 0) !== inicio || st.pendiente.config) {
+        const ahora = proveedor.obtenerDatos();
+        config = { ...ahora.config, tareas: (remota && remota.tareas) || [] };
+        registros = unirRegistros(ahora.registros, remotos);
+        st.pendiente.config = true;
+      }
     } else {
       st.ids.config = await crearJSON(CONFIG, st.ids.carpeta, local.config);
       recordar('ids:' + st.usuario.email, st.ids);
@@ -293,6 +302,7 @@ const Google = (() => {
   // La app avisa de cambios; se guardan en Drive a los 2 segundos
   function cambiado(que) {
     st.pendiente[que] = true;
+    st.cambios = (st.cambios || 0) + 1;
     if (!st.usuario) return;
     clearTimeout(st.temporizador);
     st.temporizador = setTimeout(subir, 2000);

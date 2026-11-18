@@ -108,8 +108,10 @@ Google.usarProveedor({
   aplicarDatos: (config, registros) => {
     // los registros eliminados en cualquier ordenador no vuelven
     const eliminados = [...new Set([...(estado.config.eliminados || []), ...(config.eliminados || [])])];
-    const faltabanEnDrive = eliminados.length > (config.eliminados || []).length;
-    estado.config = Object.assign(structuredClone(CONFIG_DEFECTO), config, { eliminados });
+    const tareas = unirTareas(estado.config.tareas, config.tareas);
+    const firmaTareas = l => JSON.stringify((l || []).map(t => t.id + t.actualizado).sort());
+    const faltabanEnDrive = eliminados.length > (config.eliminados || []).length || firmaTareas(tareas) !== firmaTareas(config.tareas);
+    estado.config = Object.assign(structuredClone(CONFIG_DEFECTO), config, { eliminados, tareas });
     registros = registros.filter(r => !eliminados.includes(r.id));
     const vacio = actual() && !tieneDatos(actual()) ? actual() : null;
     estado.registros = registros.length ? registros : [nuevoRegistro()];
@@ -117,7 +119,12 @@ Google.usarProveedor({
     if (!estado.registros.find(r => r.id === estado.actualId)) estado.actualId = estado.registros[estado.registros.length - 1].id;
     Almacen.guardar('config', estado.config);
     Almacen.guardar('registros', registrosGuardables());
-    if (estado.vista !== 'form' || !document.activeElement?.dataset?.k) render();
+    const escribiendo = document.activeElement?.dataset?.k || document.activeElement?.dataset?.tarea || document.activeElement?.id === 'tareaNueva';
+    // En «Datos de la parroquia» y «Firmantes» no se redibuja: si se acaba de elegir una imagen
+    // (sello, logo, firma) el campo de archivo tiene que seguir siendo el mismo para recibirla.
+    const editandoConfig = estado.vista === 'parroquia' || estado.vista === 'firmantes';
+    if (!escribiendo && !editandoConfig) render();
+    else if (estado.vista === 'menu' && !document.activeElement?.dataset?.tarea) pintarTareas();
     return { registros: estado.registros.filter(tieneDatos), configPendiente: faltabanEnDrive };
   }
 });
@@ -279,6 +286,7 @@ function render() {
   else if (estado.vista === 'firmantes') app.innerHTML = vistaFirmantes();
   else app.innerHTML = vistaFormulario();
   if (estado.vista === 'form') actualizarPrevia();
+  if (estado.vista === 'menu') ajustarTareas();
   if (estado.vista !== 'menu') setTimeout(irAlPrimerVacio, 0);
 }
 function irA(vista) { estado.vista = vista; render(); window.scrollTo(0, 0); }
@@ -321,10 +329,65 @@ function vistaMenu() {
         </div>
       </div>
     </div>
-    <div class="tarjeta">${grupos}
-      <div class="leyenda"><span>Modelo listo</span><span class="p">Falta el modelo (PDF de ejemplo)</span></div>
+    <div class="menu-cuerpo">
+      <div class="tarjeta">${grupos}
+        <div class="leyenda"><span>Modelo listo</span><span class="p">Falta el modelo (PDF de ejemplo)</span></div>
+      </div>
+      ${tareasHTML()}
     </div>
   </main>`;
+}
+
+/* ---------------- TAREAS PENDIENTES (compartidas por la parroquia vía Drive) ---------------- */
+const tareasVivas = () => (estado.config.tareas || []).filter(t => !t.borrada);
+function tareasHTML() {
+  const lista = tareasVivas().sort((a, b) => (a.hecha - b.hecha) || (a.hecha ? b.actualizado.localeCompare(a.actualizado) : a.creada.localeCompare(b.creada)));
+  const pend = lista.filter(t => !t.hecha).length, hechas = lista.length - pend;
+  const fecha = iso => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }); };
+  const item = t => `<li class="tarea ${t.hecha ? 'hecha' : ''}">
+      <input type="checkbox" data-tarea-hecha="${t.id}" ${t.hecha ? 'checked' : ''} aria-label="Hecha">
+      <div class="tarea-cuerpo">
+        <textarea rows="1" class="tarea-texto" data-tarea="${t.id}" aria-label="Tarea">${esc(t.texto)}</textarea>
+        <span class="tarea-meta">${esc([t.autor, fecha(t.actualizado)].filter(Boolean).join(' · '))}</span>
+      </div>
+      <button class="tarea-borrar" data-tarea-borrar="${t.id}" title="Eliminar tarea" aria-label="Eliminar tarea">${IC.papelera}</button>
+    </li>`;
+  return `<aside class="tarjeta tareas">
+    <div class="cab-registros"><h3>Tareas pendientes</h3><span class="contador">${pend ? pend + ' pendiente' + (pend === 1 ? '' : 's') : 'Nada pendiente'}</span></div>
+    <form class="tarea-nueva" data-tarea-form>
+      <input type="text" id="tareaNueva" placeholder="Nueva tarea…" autocomplete="off" maxlength="300">
+      <button class="btn prim" type="submit" title="Añadir tarea">${IC.nuevo}Añadir</button>
+    </form>
+    <ul class="lista-tareas">${lista.map(item).join('') || '<li class="nota tarea-vacia">No hay tareas. Escribe una arriba y pulsa Añadir.</li>'}</ul>
+    ${hechas ? `<button class="btn enlace" data-tareas-limpiar>Quitar las ${hechas} hecha${hechas === 1 ? '' : 's'}</button>` : ''}
+    <p class="nota">Las ve cualquiera que use esta parroquia con su cuenta de Google.</p>
+  </aside>`;
+}
+function autorTarea() {
+  const u = Google.estado().usuario;
+  return u ? (u.nombre || u.name || u.email || '').split(' ')[0] : '';
+}
+function cambiarTarea(id, cambios) {
+  const t = (estado.config.tareas || []).find(x => x.id === id); if (!t) return;
+  Object.assign(t, cambios, { actualizado: ahora() });
+  guardarConfig();
+}
+function pintarTareas() {
+  const v = document.querySelector('aside.tareas'); if (!v) return;
+  const foco = document.activeElement && document.activeElement.id === 'tareaNueva';
+  v.outerHTML = tareasHTML();
+  ajustarTareas();
+  if (foco) $('#tareaNueva').focus();
+}
+function ajustarTareas() {
+  document.querySelectorAll('.tarea-texto').forEach(t => { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; });
+}
+// Une las tareas de este ordenador con las de Drive: por tarea, gana el cambio más reciente
+function unirTareas(a = [], b = []) {
+  const m = new Map();
+  [...a, ...b].forEach(t => { const x = m.get(t.id); if (!x || (t.actualizado || '') > (x.actualizado || '')) m.set(t.id, t); });
+  const mes = Date.now() - 60 * 86400000; // los borrados se recuerdan dos meses
+  return [...m.values()].filter(t => !t.borrada || new Date(t.actualizado).getTime() > mes);
 }
 
 /* ---------------- PANTALLA DE DATOS ---------------- */
@@ -809,11 +872,17 @@ function leerImagen(file) {
     r.onload = () => {
       const im = new Image();
       im.onload = () => {
-        const max = 900, k = Math.min(1, max / Math.max(im.width, im.height));
+        // 700 px bastan para imprimir el sello o la firma a su tamaño; así ocupan poco
+        const max = 700, k = Math.min(1, max / Math.max(im.width, im.height));
         const cv = document.createElement('canvas');
         cv.width = Math.round(im.width * k); cv.height = Math.round(im.height * k);
-        cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height);
-        res(cv.toDataURL('image/png'));
+        const g = cv.getContext('2d');
+        g.drawImage(im, 0, 0, cv.width, cv.height);
+        // si no tiene transparencia (foto o escaneo) se guarda en JPEG, que pesa mucho menos
+        const px = g.getImageData(0, 0, cv.width, cv.height).data;
+        let transparente = false;
+        for (let i = 3; i < px.length; i += 16) if (px[i] < 250) { transparente = true; break; }
+        res(transparente ? cv.toDataURL('image/png') : cv.toDataURL('image/jpeg', 0.88));
       };
       im.onerror = rej; im.src = r.result;
     };
@@ -855,7 +924,7 @@ window.addEventListener('wheel', e => {
    detenerse en el día, mes y año de las fechas. Varón/Mujer es una sola parada. */
 function camposNavegables() {
   return [...document.querySelectorAll('main .tarjeta input:not([type=file]):not([type=color]):not([type=checkbox]), main .tarjeta select, main .tarjeta textarea, main .tarjeta .sexo button.on')]
-    .filter(el => !el.disabled && el.offsetParent !== null);
+    .filter(el => !el.disabled && el.offsetParent !== null && !el.closest('.tareas'));
 }
 function enfocar(el) {
   if (!el) return;
@@ -898,6 +967,8 @@ document.addEventListener('click', async e => {
   if (sumario && !e.target.closest('.resuelto') && sumario.parentElement.dataset.estado !== 'resuelto') { e.preventDefault(); return; }
   if (e.target.closest('summary .resuelto')) { e.stopPropagation(); if (e.target.tagName !== 'INPUT') { e.preventDefault(); e.target.closest('.resuelto').querySelector('input').click(); } return; }
   const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.tareaBorrar) { if (await confirmar('¿Eliminar esta tarea?', 'Eliminar')) { cambiarTarea(t.dataset.tareaBorrar, { borrada: true }); pintarTareas(); } return; }
+  if (t.dataset.tareasLimpiar !== undefined) { (estado.config.tareas || []).filter(x => x.hecha && !x.borrada).forEach(x => Object.assign(x, { borrada: true, actualizado: ahora() })); guardarConfig(); pintarTareas(); return; }
   if (t.dataset.tam) cambiarEscala(+t.dataset.tam);
   else if (t.dataset.ir) irA(t.dataset.ir);
   else if (t.id === 'previa') abrirAmpliada();
@@ -972,6 +1043,7 @@ function sexoAutomatico() {
 
 document.addEventListener('input', e => {
   const el = e.target;
+  if (el.dataset.tarea) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; return; }
   if (el.dataset.k && cuentaDe(el.dataset.k)) {
     const max = cuentaDe(el.dataset.k).max;
     if (el.value.length > max) el.value = el.value.slice(0, max);
@@ -999,8 +1071,24 @@ document.addEventListener('toggle', e => {
   if (det.open) set.add(i); else set.delete(i);
 }, true);
 
+document.addEventListener('submit', e => {
+  if (!e.target.matches('[data-tarea-form]')) return;
+  e.preventDefault();
+  const inp = $('#tareaNueva'), texto = inp.value.trim(); if (!texto) return;
+  const t = ahora();
+  (estado.config.tareas = estado.config.tareas || []).push({ id: 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), texto, hecha: false, creada: t, actualizado: t, autor: autorTarea() });
+  guardarConfig(); inp.value = ''; pintarTareas(); $('#tareaNueva').focus();
+});
+
 document.addEventListener('change', async e => {
   const el = e.target;
+  if (el.dataset.tareaHecha) { cambiarTarea(el.dataset.tareaHecha, { hecha: el.checked }); pintarTareas(); return; }
+  if (el.dataset.tarea) {
+    const v = el.value.trim();
+    if (!v) { cambiarTarea(el.dataset.tarea, { borrada: true }); pintarTareas(); }
+    else cambiarTarea(el.dataset.tarea, { texto: v, autor: autorTarea() || undefined });
+    return;
+  }
   if (/(_ex_|^t[12]_)juramento$/.test(el.dataset.k || '')) {
     const pref = el.dataset.k.replace(/juramento$/, '');
     estado.registro[el.dataset.k] = el.value;
@@ -1027,6 +1115,7 @@ document.addEventListener('change', async e => {
 });
 
 document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey && e.target.dataset && e.target.dataset.tarea) { e.preventDefault(); e.target.blur(); return; }
   if (e.key === 'Escape') ['#ampliada', '#busqueda', '#correo'].forEach(s => { const m = $(s); if (m) m.remove(); });
   if (e.key === 'Enter' && e.target.closest('#busqueda')) { const r = $('#resultados .resultado'); if (r) r.click(); }
 });

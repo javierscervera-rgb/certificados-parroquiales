@@ -141,6 +141,28 @@
   .columna-pareja:last-child { padding-right: 0; }
   .columna-pareja h4 { font-family: 'EB Garamond', Georgia, serif; font-size: 22px; font-weight: 600; text-align: center; margin: 4px 0 12px; color: var(--tinta); }
   .miniatura .n-paginas { position: absolute; left: 16px; bottom: 16px; background: rgba(29,34,48,.85); color: #fff; font-size: 11px; padding: 4px 8px; border-radius: 999px; }
+  /* Menú: certificados y, a la derecha, tareas pendientes */
+  .menu-cuerpo { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; align-items: start; }
+  .tareas { position: sticky; top: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .tareas h3 { margin: 0; }
+  .tarea-nueva { display: flex; gap: 6px; }
+  .tarea-nueva input { flex: 1; min-width: 0; }
+  .tarea-nueva .btn { white-space: nowrap; padding: 0 12px; }
+  .lista-tareas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; max-height: 60vh; overflow-y: auto; }
+  .tarea { display: flex; align-items: flex-start; gap: 8px; padding: 7px 4px; border-bottom: 1px solid var(--borde); }
+  .tarea > input[type=checkbox] { width: 18px; height: 18px; margin-top: 4px; flex: none; accent-color: var(--azul); }
+  .tarea-cuerpo { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .tarea-texto { border: 1px solid transparent !important; background: transparent !important; padding: 2px 4px !important; height: auto; min-height: 0 !important; resize: none; font: inherit; font-size: 14px; line-height: 1.35; color: var(--tinta); overflow: hidden; box-shadow: none !important; }
+  .tarea-texto:hover { border-color: var(--borde) !important; }
+  .tarea-texto:focus { border-color: var(--azul) !important; background: #fff !important; outline: none; }
+  .tarea.hecha .tarea-texto { text-decoration: line-through; color: var(--suave); }
+  .tarea-meta { font-size: 11px; color: var(--suave); padding-left: 5px; }
+  .tarea-borrar { border: 0; background: none; color: var(--suave); padding: 4px; border-radius: 6px; cursor: pointer; opacity: .5; }
+  .tarea:hover .tarea-borrar, .tarea-borrar:focus { opacity: 1; }
+  .tarea-borrar:hover { color: #b02a2a; background: #f5e4e4; }
+  .tarea-borrar svg { width: 16px; height: 16px; }
+  .tarea-vacia { padding: 6px 2px; }
+  .btn.enlace { align-self: flex-start; border: 0; background: none; padding: 0; color: var(--azul); text-decoration: underline; font-size: 13px; min-height: 0; }
   /* Contador de caracteres */
   .campo.con-contador { position: relative; }
   .con-contador > label { padding-right: 52px; }
@@ -259,6 +281,8 @@
   @media (max-width: 700px) {
     main { padding: 16px; }
     .menu-top { grid-template-columns: minmax(0, 1fr); }
+    .menu-cuerpo { grid-template-columns: minmax(0, 1fr); }
+    .tareas { position: static; }
     .menu-top > *, .fila > select, .form-layout > * { min-width: 0; }
     .cab-registros { flex-wrap: wrap; gap: 4px 10px; }
     .cab-registros .contador { white-space: normal; }
