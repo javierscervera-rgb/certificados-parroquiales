@@ -27,7 +27,9 @@ Aplicación web para generar los certificados que se usan habitualmente en las p
 | Matrimonio | Comunicación de matrimonio (con tabla de trámites) | ✅ |
 | Matrimonio | Exhorto de amonestaciones (con certificación de la parroquia que publica) | ✅ |
 | Matrimonio | Alegato V · Autorización de matrimonio (2 páginas, datos de la Vicaría) | ✅ |
-| Matrimonio | Expediente, amonestaciones activas, registro civil | ⏳ falta pantalla y modelo |
+| Matrimonio | Expediente matrimonial (11 páginas sobre el impreso oficial; completo o por partes: portada, novio, novia, testigo 1, testigo 2, diligencias) | ✅ |
+| Matrimonio | Fe de vida y estado (novio y novia) · Atestado de libertad (desde el expediente) | ✅ |
+| Matrimonio | Amonestaciones activas, registro civil | ⏳ falta el modelo |
 | Confirmación | Certificado de confirmación | ✅ |
 | Confirmación | Comunicación de confirmación | ✅ |
 | Confirmación | Certificado para ser padrino/madrina de confirmación | ✅ |
@@ -67,3 +69,9 @@ En el repositorio, entra en *Settings → Pages → Build and deployment*. Elige
 python3 -m http.server 8000
 # abre http://localhost:8000
 ```
+
+## Expediente matrimonial
+
+- Los datos de los novios son los mismos campos que usa el Alegato V (`novio_*`, `novia_*`), así que lo que se rellena en uno aparece en el otro y en el atestado, la fe de vida y los exhortos.
+- Las respuestas del examen se guardan como `novio_ex_*`, `novia_ex_*`, `t1_*` y `t2_*`.
+- Los fondos de página (`fondos/expediente-NN.jpg`) son el impreso oficial en blanco, sin datos personales.

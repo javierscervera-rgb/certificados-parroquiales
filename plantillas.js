@@ -37,6 +37,14 @@ const H = {
     return s || '______________________';
   },
   novio(d) { return H.nombre(d, 'novio_nombre', 'novio_apellidos'); },
+  // Nombre completo de un contrayente ('novio' o 'novia') con 1º y 2º apellido
+  persona(d, l) {
+    const j = (...a) => a.filter(x => x && String(x).trim()).join(' ').trim();
+    return j(d[l + '_nombre'], d[l + '_apellido1'], d[l + '_apellido2']) || j(d[l + '_nombre'], d[l + '_apellidos']);
+  },
+  // Padre y madre de un contrayente (nombre y apellidos por separado; se admite el campo antiguo de nombre completo)
+  padre(d, l) { return [d[l + '_padre_nombre'], d[l + '_padre_apellidos']].filter(x => x && x.trim()).join(' ').trim() || (d['padre_' + l] || ''); },
+  madre(d, l) { return [d[l + '_madre_nombre'], d[l + '_madre_apellidos']].filter(x => x && x.trim()).join(' ').trim() || (d['madre_' + l] || ''); },
   novia(d) { return H.nombre(d, 'novia_nombre', 'novia_apellidos'); },
   // nacido / nacida, hijo / hija...
   g(d, masc, fem) { return d.sexo === 'F' ? fem : masc; },
@@ -79,6 +87,30 @@ const C = {
 };
 const con = (campo, cambios) => Object.assign({}, campo, cambios);
 
+// Datos de cada contrayente: los mismos en el Alegato V, el Expediente, el Atestado y la Fe de vida.
+// Clave real: novio_<k> o novia_<k>.
+const CAMPOS_PAREJA = [
+  { k: 'nombre', label: 'Nombre', w: 12 },
+  { k: 'apellido1', label: '1º Apellido', w: 6 }, { k: 'apellido2', label: '2º Apellido', w: 6 },
+  { k: 'telefono', label: 'Teléfono', w: 6, tipo: 'tel' },
+  { k: 'lugar_nac', label: 'Lugar de nacimiento', w: 8, sep: true, nueva: true }, { k: 'f_nac', label: 'Fecha nacimiento', tipo: 'date', w: 4 },
+  { k: 'padre_nombre', label: 'Nombre padre', w: 5 }, { k: 'padre_apellidos', label: 'Apellidos padre', w: 7 },
+  { k: 'madre_nombre', label: 'Nombre madre', w: 5 }, { k: 'madre_apellidos', label: 'Apellidos madre', w: 7 },
+  { k: 'registro_civil', label: 'Registro civil', w: 12, sep: true },
+  { k: 'tomo_rc', label: 'Tomo reg. civil', w: 6 }, { k: 'pagina_rc', label: 'Página reg. civil', w: 6 },
+  { k: 'religion', label: 'Religión', w: 12 },
+  { k: 'f_bau', label: 'Fecha bautismo', tipo: 'date', w: 5, sep: true }, { k: 'ciudad_bau', label: 'Ciudad bautismo', w: 7 },
+  { k: 'parroquia_bau', label: 'Parroquia bautismo', w: 12 },
+  { k: 'diocesis_bau', label: 'Diócesis bautismo', w: 12 },
+  { k: 'libro_bau', label: 'Libro', w: 4 }, { k: 'folio_bau', label: 'Folio', w: 4 }, { k: 'num_bau', label: 'Número', w: 4 },
+  { k: 'confirmacion', label: 'Confirmación', w: 12, sep: true, ph: 'No / fecha y parroquia' },
+  { k: 'estado_civil', label: 'Estado civil', w: 6, sep: true, ph: 'SOLTERO/A' }, { k: 'nacionalidad', label: 'Nacionalidad', w: 6 },
+  { k: 'dni', label: 'DNI', w: 6 },
+  { k: 'domicilio', label: 'Domicilio', w: 12 },
+  { k: 'tiempo_domicilio', label: 'Tiempo en domicilio', w: 6, ph: '5 años' },
+  { k: 'parroquia_domicilio', label: 'Parroquia domicilio', w: 12 },
+];
+
 // Certificado para ser padrino/madrina (bautismo o confirmación)
 function padrinoDe(id, grupo, sacramento) {
   return {
@@ -94,6 +126,58 @@ function padrinoDe(id, grupo, sacramento) {
       ],
       cierre: CIERRE_CERTIFICO, cierreEspacio: 2
     })
+  };
+}
+
+// Declaración responsable de fe de vida y estado (un contrayente)
+function feDeVida(d, ctx, l) {
+  const f = ctx.firmante || {}, cfg = ctx.config, M = l === 'novio';
+  const parroquia = (cfg.nombre || '').replace(/^parroquia( de)?\s+/i, '');
+  const estado = (d[l + '_estado_civil'] || '__________').toUpperCase();
+  return {
+    titulo: 'DECLARACIÓN RESPONSABLE\nDE FE DE VIDA Y ESTADO',
+    cuerpo: { tam: 11, interlinea: 20 },
+    bloques: [
+      { p: `Ante ${H.t(f.nombre)}, ${H.t(f.cargo, '')} de la Parroquia de ${H.t(parroquia)}, ${H.t(cfg.localidad)}` },
+      { p: `Comparece ${M ? 'D.' : 'Dña.'} ${H.t(H.persona(d, l), '______________________')}, natural de ${H.t(d[l + '_lugar_nac'])}, ${M ? 'nacido' : 'nacida'} el ${H.fecha(d[l + '_f_nac'])}, con domicilio en ${H.t(d[l + '_domicilio'])}, que exhibe el DNI/NIE nº ${H.t(d[l + '_dni'])} el cual declara solemnemente y bajo su responsabilidad, previas las advertencias y prevenciones legales pertinentes, que vive en el día de la fecha y que su estado civil es el de **${estado}**` },
+      { p: 'lo que declara a los efectos oportunos para que sea tenido en cuenta en el trámite del matrimonio que pretende contraer.' },
+    ],
+    cierre: null, firmaEspacio: 5,
+    firmaIzquierda: 'Fdo. ' + (H.persona(d, l) || '______________________'),
+  };
+}
+
+// Atestado de libertad (para la Vicaría): toma los datos de los dos contrayentes
+function atestado(d, ctx) {
+  const cfg = ctx.config;
+  const uno = l => {
+    const M = l === 'novio', o = M ? 'o' : 'a';
+    const bau = [d[l + '_ciudad_bau'], d[l + '_diocesis_bau']].filter(Boolean).join(', ');
+    return [
+      { p: `${M ? 'Don' : 'Doña'} ${H.t(H.persona(d, l))}, domiciliad${o} en ${H.t(d[l + '_domicilio'])}, que **nació** en ${H.t(d[l + '_lugar_nac'])}, el día ${H.fecha(d[l + '_f_nac'])},`, espacio: 1.6 },
+      { p: `**bautizad${o}** en ${H.t(bau)}, parroquia de ${H.t(d[l + '_parroquia_bau'])} el día ${H.fecha(d[l + '_f_bau'])}, libro ${H.t(d[l + '_libro_bau'], '___')}, folio ${H.t(d[l + '_folio_bau'], '___')}, nº ${H.t(d[l + '_num_bau'], '___')},`, espacio: 1 },
+      { p: `**confirmad${o}** ${H.t(d[l + '_confirmacion'], '_____')}, de **estado** ${H.t(d[l + '_estado_civil'], '_____')}.`, espacio: 1 },
+      { p: `Es hij${o} de D. ${H.t(H.padre(d, l))} y de Dª ${H.t(H.madre(d, l))}, con DNI/NIE ${H.t(d[l + '_dni'])}, Registro civil de ${H.t(d[l + '_registro_civil'])}, tomo ${H.t(d[l + '_tomo_rc'], '___')}, página ${H.t(d[l + '_pagina_rc'], '___')}.`, espacio: 1 },
+    ];
+  };
+  const dias = [d.proclamas_desde, d.proclamas_hasta].filter(Boolean).map(H.fecha);
+  const estados = [d.novio_estado_civil, d.novia_estado_civil].map(x => (x || '').toLowerCase());
+  const solteros = estados.every(x => /^solter/.test(x)) ? 'solteros' : estados.filter(Boolean).join(' y ') || '__________';
+  const bloques = [
+    { centro: 'Salud y gracia en Nuestro Señor Jesucristo' },
+    ...uno('novio'), ...uno('novia'),
+    { p: `Que han sido amonestados en las parroquias de ${H.t(d.proclamas_parroquias, '______________')} ${dias.length > 1 ? `del ${dias[0]} al ${dias[1]}` : `el día ${dias[0] || '__________'}`}.`, espacio: 2 },
+    { p: `En su virtud se declara a los contrayentes ${solteros} y libres para su proyectado matrimonio en la Parroquia de ${H.t(d.parroquia_boda)} el día ${H.fecha(d.f_mat)}.`, espacio: 2 },
+    { p: 'Y para ello se concede Licencia y anuencia de jurisdicción en cuanto fuera posible.', espacio: 1.4 },
+  ];
+  bloques[1].espacio = 2;
+  bloques[5].espacio = 2;
+  return {
+    titulo: `ATESTADO DE LIBERTAD\nAL ILMO. SR. VICARIO GENERAL DE ${(cfg.diocesis || '').toUpperCase()}`, tituloNegrita: true, tituloTam: 14,
+    interlinea: 17, cuerpo: { tam: 10.5, interlinea: 17 },
+    bloques,
+    cierre: null, sinFirmante: true,
+    firmaVicario: [`Firma ${cfg.vicarioCargo || 'Vicario Episcopal'}`, cfg.vicaria || ''],
   };
 }
 
@@ -262,29 +346,50 @@ const CERTIFICADOS = [
       };
     }
   },
-  { id: 'expediente', grupo: 'matrimonio', estado: 'pendiente', nombre: 'Expediente prematrimonial', titulo: 'Expediente prematrimonial', campos: [] },
+  /* ---------------- EXPEDIENTE MATRIMONIAL (y documentos que salen de él) ---------------- */
+  {
+    id: 'expediente', grupo: 'matrimonio', estado: 'listo',
+    nombre: 'Expediente prematrimonial', titulo: 'Expediente matrimonial',
+    formato: 'expediente',
+    camposPareja: CAMPOS_PAREJA,
+    campos: [
+      { k: 'parroquia_cursillo', label: 'Parroquia cursillo', w: 6, sep: true }, { k: 'fecha_cursillo', label: 'Fecha cursillo', ph: '16 a 18 de octubre de 2026', w: 6 },
+      { k: 'parroquia_boda', label: 'Lugar boda', w: 6 }, { k: 'f_mat', label: 'Fecha boda', tipo: 'date', w: 3 },
+      { k: 'num_expediente', label: 'Nº expediente', w: 3 },
+      { k: 'domicilio_boda', label: 'Domicilio después de la boda', w: 12 },
+      { k: 'documentos', label: 'Documentos que se adjuntan', tipo: 'textarea', w: 12, defecto: () => EXPEDIENTE.DOCUMENTOS },
+    ],
+    documento: () => ({ formato: 'expediente' })
+  },
+  {
+    id: 'fe_vida_novio', grupo: 'expediente', estado: 'listo', lado: 'novio',
+    nombre: 'Fe de vida y estado (novio)', titulo: 'Declaración responsable de fe de vida y estado · Novio',
+    campos: [], camposLado: ['nombre', 'apellido1', 'apellido2', 'lugar_nac', 'f_nac', 'dni', 'estado_civil', 'domicilio'],
+    documento: (d, ctx) => feDeVida(d, ctx, 'novio')
+  },
+  {
+    id: 'fe_vida_novia', grupo: 'expediente', estado: 'listo', lado: 'novia',
+    nombre: 'Fe de vida y estado (novia)', titulo: 'Declaración responsable de fe de vida y estado · Novia',
+    campos: [], camposLado: ['nombre', 'apellido1', 'apellido2', 'lugar_nac', 'f_nac', 'dni', 'estado_civil', 'domicilio'],
+    documento: (d, ctx) => feDeVida(d, ctx, 'novia')
+  },
+  {
+    id: 'atestado', grupo: 'expediente', estado: 'listo',
+    nombre: 'Atestado de libertad', titulo: 'Atestado de libertad',
+    camposPareja: CAMPOS_PAREJA,
+    campos: [
+      { k: 'proclamas_parroquias', label: 'Amonestados en las parroquias de', w: 6, sep: true },
+      { k: 'proclamas_desde', label: 'Proclamas desde el día', tipo: 'date', w: 3 }, { k: 'proclamas_hasta', label: 'Hasta el día', tipo: 'date', w: 3 },
+      { k: 'parroquia_boda', label: 'Parroquia de la boda', w: 9 }, { k: 'f_mat', label: 'Fecha boda', tipo: 'date', w: 3 },
+    ],
+    documento: (d, ctx) => atestado(d, ctx)
+  },
   {
     id: 'alegato', grupo: 'matrimonio', estado: 'listo',
     nombre: 'Alegato V', titulo: 'Alegato V · Autorización de matrimonio',
     // Campos de cada contrayente: se muestran en dos columnas (El contrayente / La contrayente).
     // La clave real es novio_<k> o novia_<k>, salvo que se indique otra.
-    camposPareja: [
-      { k: 'nombre', label: 'Nombre', w: 12 },
-      { k: 'apellido1', label: '1º Apellido', w: 6 }, { k: 'apellido2', label: '2º Apellido', w: 6 },
-      { k: 'lugar_nac', label: 'Lugar de nacimiento', w: 8, sep: true }, { k: 'f_nac', label: 'Fecha nacimiento', tipo: 'date', w: 4 },
-      { k: 'padre', label: 'Padre', w: 6, clave: lado => 'padre_' + lado }, { k: 'madre', label: 'Madre', w: 6, clave: lado => 'madre_' + lado },
-      { k: 'registro_civil', label: 'Registro civil', w: 12, sep: true },
-      { k: 'tomo_rc', label: 'Tomo reg. civil', w: 6 }, { k: 'pagina_rc', label: 'Página reg. civil', w: 6 },
-      { k: 'religion', label: 'Religión', w: 12 },
-      { k: 'f_bau', label: 'Fecha bautismo', tipo: 'date', w: 5, sep: true }, { k: 'ciudad_bau', label: 'Ciudad bautismo', w: 7 },
-      { k: 'parroquia_bau', label: 'Parroquia bautismo', w: 12 },
-      { k: 'diocesis_bau', label: 'Diócesis bautismo', w: 12 },
-      { k: 'libro_bau', label: 'Libro', w: 4 }, { k: 'folio_bau', label: 'Folio', w: 4 }, { k: 'num_bau', label: 'Número', w: 4 },
-      { k: 'estado_civil', label: 'Estado civil', w: 6, sep: true, ph: 'soltero/a' }, { k: 'nacionalidad', label: 'Nacionalidad', w: 6 },
-      { k: 'dni', label: 'DNI', w: 6 },
-      { k: 'domicilio', label: 'Domicilio', w: 12 },
-      { k: 'parroquia_domicilio', label: 'Parroquia domicilio', w: 12 },
-    ],
+    camposPareja: CAMPOS_PAREJA,
     campos: [
       { k: 'parroquia_boda', label: 'Parroquia de la boda', w: 8, sep: true },
       { k: 'num_expediente', label: 'Nº expediente (Vicaría)', w: 4 },
@@ -298,25 +403,29 @@ const CERTIFICADOS = [
     nombre: 'Exhorto amonestaciones (fuera)', titulo: 'Exhorto de amonestaciones matrimoniales',
     campos: [{ k: 'parroquia_exhorto', label: 'Parroquia a la que se envía', w: 12 },
       C.novio_nombre, C.novio_apellidos,
-      { k: 'padre_novio', label: 'Padre del novio', w: 6, nueva: true }, { k: 'madre_novio', label: 'Madre del novio', w: 6 },
+      { k: 'novio_padre_nombre', label: 'Nombre padre novio', w: 3, nueva: true }, { k: 'novio_padre_apellidos', label: 'Apellidos padre', w: 3 },
+      { k: 'novio_madre_nombre', label: 'Nombre madre novio', w: 3 }, { k: 'novio_madre_apellidos', label: 'Apellidos madre', w: 3 },
       C.novia_nombre, C.novia_apellidos,
-      { k: 'padre_novia', label: 'Padre de la novia', w: 6, nueva: true }, { k: 'madre_novia', label: 'Madre de la novia', w: 6 },
+      { k: 'novia_padre_nombre', label: 'Nombre padre novia', w: 3, nueva: true }, { k: 'novia_padre_apellidos', label: 'Apellidos padre', w: 3 },
+      { k: 'novia_madre_nombre', label: 'Nombre madre novia', w: 3 }, { k: 'novia_madre_apellidos', label: 'Apellidos madre', w: 3 },
       { k: 'feligres', label: 'Feligrés de esa parroquia', tipo: 'select', opciones: ['Novio', 'Novia'], w: 3, nueva: true, sep: true },
-      { k: 'domicilio_feligres', label: 'Vive en', ph: 'calle, población', w: 6 },
-      { k: 'tiempo_feligres', label: 'Desde hace', ph: '5 años', w: 3 }],
+      { k: 'novio_domicilio', label: 'Domicilio del novio', w: 6, nueva: true }, { k: 'novio_tiempo_domicilio', label: 'Desde hace', ph: '5 años', w: 3 },
+      { k: 'novia_domicilio', label: 'Domicilio de la novia', w: 6, nueva: true }, { k: 'novia_tiempo_domicilio', label: 'Desde hace', ph: '5 años', w: 3 }],
     documento: (d) => {
       const esNovia = d.feligres === 'Novia';
+      const lado = esNovia ? 'novia' : 'novio';
       const feligres = esNovia ? H.novia(d) : H.novio(d);
+      const vive = d[lado + '_domicilio'] || d.domicilio_feligres, desde = d[lado + '_tiempo_domicilio'] || d.tiempo_feligres;
       return {
         titulo: 'EXHORTO DE AMONESTACIONES\nMATRIMONIALES', tituloNegrita: true, tituloTam: 16, tituloY: 120, tituloHueco: 66,
         cuerpo: { x0: 56, x1: 545, tam: 11.5, interlinea: 22, justificar: false },
         bloques: [
           { linea: `Al Rev. Sr. Cura párroco de ${H.t(d.parroquia_exhorto, '______________________')}.`, subrayado: true },
           { linea: 'Dígnese publicar que pretenden contraer matrimonio:', espacio: 2 },
-          { centro: `**${H.novio(d)}**, hijo de ${H.t(d.padre_novio)} y ${H.t(d.madre_novio)}`, espacio: 1.1 },
+          { centro: `**${H.novio(d)}**, hijo de ${H.t(H.padre(d, 'novio'))} y ${H.t(H.madre(d, 'novio'))}`, espacio: 1.1 },
           { centro: 'con', espacio: 1.1 },
-          { centro: `**${H.novia(d)}**, hija de ${H.t(d.padre_novia)} y ${H.t(d.madre_novia)}`, espacio: 1.1 },
-          { p: `${esNovia ? 'La contrayente es feligresa' : 'El contrayente es feligrés'} en la parroquia de su digno cargo ya que vive en ${H.t(d.domicilio_feligres)} desde hace ${H.t(d.tiempo_feligres, '______')}, lo que comunico a Ud. conforme a los cánones 1069 y 1070 del Código de Derecho Canónico.`, espacio: 2.2 },
+          { centro: `**${H.novia(d)}**, hija de ${H.t(H.padre(d, 'novia'))} y ${H.t(H.madre(d, 'novia'))}`, espacio: 1.1 },
+          { p: `${esNovia ? 'La contrayente es feligresa' : 'El contrayente es feligrés'} en la parroquia de su digno cargo ya que vive en ${H.t(vive)} desde hace ${H.t(desde, '______')}, lo que comunico a Ud. conforme a los cánones 1069 y 1070 del Código de Derecho Canónico.`, espacio: 2.2 },
           { p: 'Hechas estas proclamas o amonestaciones, le ruego me informe de su resultado y de cuanto le conste sobre su libertad y aptitud para el matrimonio que pretenden contraer. Dios guarde a Vd. muchos años.', espacio: 2 },
         ],
         cierre: null, firmaEspacio: 3.2, cargoEspacio: 18, limiteFirma: 600,

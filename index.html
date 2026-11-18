@@ -64,7 +64,7 @@
   main { padding: 22px 28px 40px; max-width: 1400px; margin: 0 auto; }
 
   /* ---------- MENÚ ---------- */
-  .menu-top { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr); gap: 18px; margin-bottom: 26px; }
+  .menu-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; margin-bottom: 26px; }
   .tarjeta { background: var(--papel); border: 1px solid var(--borde); border-radius: 12px; padding: 14px 16px; }
   .tarjeta h3 { margin: 0 0 10px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--suave); font-weight: 600; }
   .fila { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -141,6 +141,26 @@
   .columna-pareja:last-child { padding-right: 0; }
   .columna-pareja h4 { font-family: 'EB Garamond', Georgia, serif; font-size: 22px; font-weight: 600; text-align: center; margin: 4px 0 12px; color: var(--tinta); }
   .miniatura .n-paginas { position: absolute; left: 16px; bottom: 16px; background: rgba(29,34,48,.85); color: #fff; font-size: 11px; padding: 4px 8px; border-radius: 999px; }
+  /* Expediente: pestañas y secciones */
+  .pestanas { display: flex; flex-wrap: wrap; gap: 4px; margin: -4px 0 14px; border-bottom: 2px solid var(--azul); }
+  .pestanas button { border: 0; background: #e3e1dc; color: var(--tinta); padding: 9px 14px; border-radius: 8px 8px 0 0; font-weight: 600; font-size: 13px; }
+  .pestanas button.on { background: var(--azul); color: #fff; }
+  .pestanas button:hover:not(.on) { background: #d6d3cc; }
+  .intro-exp h4 { font-family: 'EB Garamond', Georgia, serif; font-size: 24px; font-weight: 500; color: #8f2a2a; margin: 0 0 4px; }
+  .intro-exp p { margin: 0; color: var(--suave); line-height: 1.45; }
+  .seccion-exp { background: var(--color, #f3eef9); border-radius: 10px; margin-top: 10px; padding: 0 14px; }
+  .seccion-exp summary { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 0; cursor: pointer; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; font-size: 13px; list-style: none; }
+  .seccion-exp summary::-webkit-details-marker { display: none; }
+  .seccion-exp summary > span::before { content: '▸'; display: inline-block; width: 16px; transition: transform .15s; }
+  .seccion-exp[open] summary > span::before { transform: rotate(90deg); }
+  .seccion-exp .resuelto { display: inline-flex; align-items: center; gap: 6px; color: #8f2a2a; font-weight: 600; text-transform: none; letter-spacing: 0; white-space: nowrap; }
+  .seccion-exp .resuelto input { width: 18px; height: 18px; accent-color: var(--azul); }
+  .seccion-exp > .rejilla { padding-bottom: 14px; }
+  .seccion-exp .campo label { white-space: normal; text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 500; color: var(--tinta); line-height: 1.35; }
+  .opciones-dil { max-width: 520px; }
+  .grupo-acc select { width: 100%; }
+  .otros-docs { gap: 5px; }
+  .otros-docs .btn { text-align: left; padding: 8px 10px; font-size: 13px; }
   .lateral { display: flex; flex-direction: column; gap: 8px; position: sticky; top: 16px; }
   .miniatura { position: relative; padding: 10px; border: 1px solid var(--borde); border-radius: 10px; background: #d9d6cf; cursor: zoom-in; display: block; width: 100%; }
   .miniatura:disabled { cursor: default; }
@@ -226,7 +246,13 @@
   }
   @media (max-width: 700px) {
     main { padding: 16px; }
-    .menu-top { grid-template-columns: 1fr; }
+    .menu-top { grid-template-columns: minmax(0, 1fr); }
+    .menu-top > *, .fila > select, .form-layout > * { min-width: 0; }
+    .cab-registros { flex-wrap: wrap; gap: 4px 10px; }
+    .cab-registros .contador { white-space: normal; }
+    .pestanas button { flex: 1 1 auto; padding: 8px 10px; }
+    .seccion-exp { padding: 0 10px; }
+    .seccion-exp summary { flex-wrap: wrap; }
     .form-layout { grid-template-columns: 1fr; }
     .rejilla .campo { grid-column: 1 / -1 !important; }
     .lateral { position: static; display: grid; grid-template-columns: 1fr 1fr; }
@@ -267,6 +293,7 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="config.js"></script>
 <script src="plantillas.js"></script>
+<script src="expediente.js"></script>
 <script src="sexo.js"></script>
 <script src="motor.js"></script>
 <script src="google.js"></script>

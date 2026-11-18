@@ -156,6 +156,14 @@ const Google = (() => {
         const k = f.clave ? f.clave(l) : `${l}_${f.k}`; if (!m[k]) m[k] = `${L}: ${f.label}`;
       }));
     });
+    if (typeof EXPEDIENTE !== 'undefined') {
+      const corto = t => (t.length > 60 ? t.slice(0, 57) + '…' : t);
+      [['novio_ex_', 'Examen novio', EXPEDIENTE.contrayente('novio')], ['novia_ex_', 'Examen novia', EXPEDIENTE.contrayente('novia')],
+       ['t1_', 'Testigo 1', EXPEDIENTE.testigo], ['t2_', 'Testigo 2', EXPEDIENTE.testigo]].forEach(([pref, L, secs]) => {
+        m[pref + 'juramento'] = `${L}: juramento`;
+        secs.forEach(sec => sec.preguntas.forEach(q => { if (!m[pref + q.k]) m[pref + q.k] = `${L}: ${corto(q.label)}`; }));
+      });
+    }
     return m;
   }
   function aFilas(registros) {

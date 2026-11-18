@@ -50,6 +50,7 @@ const estado = {
   certId: null,
   descargas: null,
   firma: null,      // índice del firmante elegido; al abrir la aplicación no hay ninguno
+  pestanaExp: 'datos', parteExp: 'portada', volverA: null,
 };
 // Migración desde la primera versión (un único registro)
 if (!Array.isArray(estado.registros)) {
@@ -85,7 +86,8 @@ function confirmar(msg, si = 'Sí', no = 'Cancelar') {
 }
 
 /* ---------------- GUARDAR ---------------- */
-const tieneDatos = r => Object.entries(r.datos).some(([k, v]) => k !== 'sexo' && k !== 'sexo_manual' && k !== 'motivo_bendicion' && k !== 'conyuge' && v && String(v).trim());
+const NO_CUENTAN = /^(sexo|sexo_manual|motivo_bendicion|conyuge|documentos|diligencia|feligres)$|_res_\d+$/;
+const tieneDatos = r => Object.entries(r.datos).some(([k, v]) => !NO_CUENTAN.test(k) && v && String(v).trim());
 const registrosGuardables = () => estado.registros.filter(r => tieneDatos(r) || r.id === estado.actualId);
 function guardarConfig() {
   if (!Almacen.guardar('config', estado.config)) aviso('No se pudo guardar en este navegador (imágenes demasiado grandes).');
@@ -342,12 +344,18 @@ function campoHTML(c) {
 
 function vistaFormulario() {
   const cert = CERTIFICADOS.find(c => c.id === estado.certId);
+  if (cert.formato === 'expediente') return vistaExpediente(cert);
   const listo = cert.estado === 'listo';
   const cfg = estado.config;
   const opcFirmas = cfg.firmas.map((f, i) => `<option value="${i}" ${i === estado.firma ? 'selected' : ''}>${esc(f.nombre)} — ${esc(f.cargo)}</option>`).join('');
   cert.campos.forEach(c => { if (c.tipo === 'select' && !estado.registro[c.k]) estado.registro[c.k] = c.opciones[0]; });
+  cert.campos.forEach(c => { if (c.defecto && estado.registro[c.k] === undefined) estado.registro[c.k] = c.defecto(); });
   let campos = cert.campos.length ? cert.campos.map(campoHTML).join('')
     : '<p class="nota" style="grid-column:1/-1">Esta pantalla todavía no está hecha. Cuando me pases la captura y un PDF de ejemplo, la monto.</p>';
+  if (cert.camposLado) {
+    const porClave = Object.fromEntries(CAMPOS_PAREJA.map(f => [f.k, f]));
+    campos = cert.camposLado.map(k => campoHTML({ ...porClave[k], k: `${cert.lado}_${k}`, sep: false, nueva: false })).join('') + campos;
+  }
   if (cert.camposPareja) {
     const d = estado.registro;
     // si solo se escribieron los apellidos juntos en otro certificado, se aprovechan
@@ -371,6 +379,7 @@ function vistaFormulario() {
       </div>
       <div class="lateral">
         <button class="acc" data-ir="menu">${IC.menu}Menú principal</button>
+        ${estado.volverA === 'expediente' && cert.id !== 'expediente' ? `<button class="acc" data-abrir="expediente">${IC.ant}Volver al expediente</button>` : ''}
         <button class="acc" data-registro="nuevo">${IC.nuevo}Nuevo registro</button>
         <button class="miniatura" id="previa" title="Pulsa para ampliar" ${listo ? '' : 'disabled'}></button>
         <div class="grupo-acc"><span>${IC.imprimir}Imprimir</span>
@@ -382,6 +391,105 @@ function vistaFormulario() {
           <button class="acc" data-pdf="0" ${listo ? '' : 'disabled'}>${IC.pdf.replace('M12 10v7M9 14l3 3 3-3', 'M9 12h6M9 16h6')}<span>Sin firma<small>Para firmar a mano</small></span></button>
         </div>
         <button class="acc" data-correo ${listo ? '' : 'disabled'}>${IC.mail}<span>Enviar por mail<small>PDF adjunto, desde tu Gmail</small></span></button>
+      </div>
+    </div>
+  </main>`;
+}
+
+
+/* ---------------- EXPEDIENTE MATRIMONIAL ---------------- */
+const PESTANAS_EXP = [
+  { id: 'datos', nombre: 'Datos generales', parte: 'portada' },
+  { id: 'novio', nombre: 'Novio', parte: 'novio' },
+  { id: 'novia', nombre: 'Novia', parte: 'novia' },
+  { id: 't1', nombre: 'Testigo 1', parte: 't1' },
+  { id: 't2', nombre: 'Testigo 2', parte: 't2' },
+  { id: 'ultima', nombre: 'Última página', parte: 'ultima' },
+];
+
+function seccionesHTML(secciones, pref) {
+  const d = estado.registro;
+  return secciones.map((sec, i) => {
+    const resuelto = d[`${pref}res_${i + 1}`] === '1';
+    const preguntas = sec.preguntas.map(q => campoHTML({ ...q, k: pref + q.k, w: q.w || 12, ph: q.ph })).join('');
+    return `<details class="seccion-exp" style="--color:${sec.color}" ${resuelto ? '' : 'open'}>
+      <summary><span>${i + 1}. ${esc(sec.seccion)}</span>
+        <label class="resuelto" title="Marca la sección como resuelta y se pliega"><input type="checkbox" data-resuelto="${pref}res_${i + 1}" ${resuelto ? 'checked' : ''}> Resuelto</label></summary>
+      <div class="rejilla">${preguntas}</div>
+    </details>`;
+  }).join('');
+}
+
+function juramentoHTML(k, texto) {
+  return `<div class="campo" style="grid-column:1/-1"><label for="c_${k}" style="white-space:normal;text-transform:none;letter-spacing:0;font-size:14px;color:var(--tinta)">${texto}</label>
+    <select id="c_${k}" data-k="${k}" style="max-width:180px">${['', 'JURO', 'PROMETO'].map(o => `<option ${estado.registro[k] === o ? 'selected' : ''}>${o}</option>`).join('')}</select></div>`;
+}
+
+function vistaExpediente(cert) {
+  const d = estado.registro, cfg = estado.config, pest = estado.pestanaExp;
+  if (d.documentos === undefined) d.documentos = EXPEDIENTE.DOCUMENTOS;
+  if (!d.diligencia) d.diligencia = 'Amonestaciones aquí';
+  ['novio', 'novia'].forEach(l => { if (!d[l + '_apellido1'] && !d[l + '_apellido2'] && d[l + '_apellidos']) d[l + '_apellido1'] = d[l + '_apellidos']; });
+  const opcFirmas = cfg.firmas.map((f, i) => `<option value="${i}" ${i === estado.firma ? 'selected' : ''}>${esc(f.nombre)} — ${esc(f.cargo)}</option>`).join('');
+  let cuerpo = '';
+  if (pest === 'datos') {
+    const columna = (lado, titulo) => `<div class="columna-pareja"><h4>${titulo}</h4><div class="rejilla">${
+      CAMPOS_PAREJA.map(f => campoHTML({ ...f, k: `${lado}_${f.k}` })).join('')}</div></div>`;
+    cuerpo = `<div class="pareja">${columna('novio', 'El contrayente')}${columna('novia', 'La contrayente')}</div>` + cert.campos.map(campoHTML).join('');
+  } else if (pest === 'novio' || pest === 'novia') {
+    const la = pest === 'novio' ? 'del contrayente' : 'de la contrayente';
+    cuerpo = `<div class="intro-exp" style="grid-column:1/-1"><h4>Examen ${la}</h4>
+      <p>Estas preguntas concluyen la preparación al matrimonio, que ha ayudado a los novios a tomar conciencia de los valores y obligaciones del matrimonio. Cada uno de los contrayentes debe ser interrogado <strong>por separado y en ausencia de los testigos</strong>.</p></div>
+      ${juramentoHTML(pest + '_ex_juramento', '¿Acepta Vd. responder a las siguientes preguntas bajo juramento?')}
+      <div style="grid-column:1/-1">${seccionesHTML(EXPEDIENTE.contrayente(pest), pest + '_ex_')}</div>`;
+  } else if (pest === 't1' || pest === 't2') {
+    cuerpo = `<div class="intro-exp" style="grid-column:1/-1"><h4>Examen del testigo ${pest[1]}</h4>
+      <p>Cada testigo debe ser interrogado <strong>por separado y en ausencia de los contrayentes</strong>.</p></div>
+      ${juramentoHTML(pest + '_juramento', '¿Acepta Vd. responder a las siguientes preguntas bajo juramento?')}
+      <div style="grid-column:1/-1">${seccionesHTML(EXPEDIENTE.testigo, pest + '_')}</div>`;
+  } else {
+    const dispensa = d.diligencia === 'Dispensa de amonestaciones';
+    cuerpo = `<div class="intro-exp" style="grid-column:1/-1"><h4>Diligencias</h4></div>
+      <div class="campo" style="grid-column:1/-1"><div class="sexo opciones-dil" data-opcion="diligencia">
+        ${['Amonestaciones aquí', 'Dispensa de amonestaciones'].map(o => `<button type="button" data-v="${o}" class="${d.diligencia === o ? 'on' : ''}">${o}</button>`).join('')}</div></div>
+      ${dispensa
+        ? campoHTML({ k: 'dispensa_motivo', label: 'Los contrayentes solicitan dispensa de las proclamas matrimoniales por', w: 12 })
+        : campoHTML({ k: 'proclamas_desde', label: 'Las proclamas matrimoniales fueron publicadas en esta parroquia desde el día', tipo: 'date', w: 4 }) +
+          campoHTML({ k: 'proclamas_hasta', label: 'hasta el día', tipo: 'date', w: 4 }) +
+          campoHTML({ k: 'proclamas_parroquias', label: 'y en las parroquias de', w: 12 })}
+      <hr class="sep"><p class="nota" style="grid-column:1/-1;margin:0">Si procede</p>
+      ${campoHTML({ k: 'otra_parroquia', label: 'Los contrayentes solicitan la celebración de su matrimonio en', w: 12 })}
+      ${campoHTML({ k: 'motivo_otra_parroquia', label: 'Motivo', w: 12 })}`;
+  }
+  const partes = EXPEDIENTE.partes.map(p => `<option value="${p.id}" ${p.id === estado.parteExp ? 'selected' : ''}>${p.nombre}</option>`).join('');
+  const otros = [
+    ['alegato', 'Alegato V'], ['exhorto:Novio', 'Exhorto novio'], ['exhorto:Novia', 'Exhorto novia'],
+    ['fe_vida_novio', 'Fe de vida y estado novio'], ['fe_vida_novia', 'Fe de vida y estado novia'], ['atestado', 'Atestado de libertad'],
+  ].map(([id, n]) => `<button class="btn" data-otro-doc="${id}">${n}</button>`).join('') + `<button class="btn" disabled title="Falta el modelo">Amonestaciones</button>`;
+  return `
+  ${cabecera(esc(cert.titulo))}
+  <main>
+    <div class="form-layout">
+      <div class="tarjeta">
+        <div class="pestanas" role="tablist">${PESTANAS_EXP.map(p => `<button role="tab" class="${p.id === pest ? 'on' : ''}" data-pestana="${p.id}">${p.nombre}</button>`).join('')}</div>
+        <div class="rejilla">
+          <div class="campo" style="grid-column:span 6"><label for="selFirma">Firma</label><select id="selFirma">${opcFirmas}</select></div>
+          <div class="campo" style="grid-column:span 3"><label for="fechaDoc">Fecha del documento</label><input type="date" id="fechaDoc" value="${estado.fechaDocumento}"></div>
+          <hr class="sep">
+          ${cuerpo}
+        </div>
+      </div>
+      <div class="lateral">
+        <button class="acc" data-ir="menu">${IC.menu}Menú principal</button>
+        <button class="acc" data-registro="nuevo">${IC.nuevo}Nuevo registro</button>
+        <button class="miniatura" id="previa" title="Pulsa para ampliar"></button>
+        <div class="grupo-acc"><span>${IC.imprimir}Expediente</span>
+          <select id="parteExp" aria-label="Qué parte del expediente">${partes}</select>
+          <button class="acc" data-imprimir="1">${IC.imprimir}<span>Imprimir</span></button>
+          <button class="acc" data-pdf="1">${IC.guardar}<span>Guardar PDF</span></button>
+          <button class="acc" data-correo>${IC.mail}<span>Enviar por mail</span></button>
+        </div>
+        <div class="grupo-acc otros-docs"><span>${IC.pdf}Otros documentos</span>${otros}</div>
       </div>
     </div>
   </main>`;
@@ -412,14 +520,15 @@ function abrirAmpliada() {
   m.addEventListener('click', e => { if (e.target === m || e.target.closest('[data-cerrar]')) m.remove(); });
   document.body.appendChild(m);
 }
-function ctx() { return { config: estado.config, firmante: firmante(), fechaDocumento: estado.fechaDocumento }; }
+function ctx() { return { config: estado.config, firmante: firmante(), fechaDocumento: estado.fechaDocumento, parteExpediente: estado.parteExp }; }
 
 async function crearPDF(conFirma) {
   const cert = CERTIFICADOS.find(c => c.id === estado.certId);
   const res = await Motor.maquetar(cert, estado.registro, ctx(), conFirma);
   const bytes = await Motor.aPDF(res, cert.titulo);
   const quien = tituloRegistro(actual()).replace('(registro vacío)', '');
-  const nombre = `${cert.nombre}${quien ? ' - ' + quien : ''}.pdf`.replace(/[\\/:*?"<>|]/g, '');
+  const parte = cert.formato === 'expediente' ? ' - ' + (EXPEDIENTE.partes.find(p => p.id === estado.parteExp) || {}).nombre : '';
+  const nombre = `${cert.formato === 'expediente' ? 'Expediente matrimonial' : cert.nombre}${parte}${quien ? ' - ' + quien : ''}.pdf`.replace(/[\\/:*?"<>|]/g, '');
   return { bytes, nombre, cert };
 }
 
@@ -695,12 +804,26 @@ document.addEventListener('keydown', e => {
 /* ---------------- EVENTOS ---------------- */
 document.addEventListener('click', async e => {
   Google.renovarSiHaceFalta();
+  if (e.target.closest('summary .resuelto')) { e.stopPropagation(); if (e.target.tagName !== 'INPUT') { e.preventDefault(); e.target.closest('.resuelto').querySelector('input').click(); } return; }
   const t = e.target.closest('button'); if (!t) return;
   if (t.dataset.tam) cambiarEscala(+t.dataset.tam);
   else if (t.dataset.ir) irA(t.dataset.ir);
   else if (t.id === 'previa') abrirAmpliada();
   else if ((t.dataset.abrir || t.dataset.registro) && sinFirma()) aviso('Primero elige quién firma.');
-  else if (t.dataset.abrir) { estado.certId = t.dataset.abrir; irA('form'); }
+  else if (t.dataset.abrir) { if (t.dataset.abrir !== 'expediente' && estado.certId !== 'expediente') estado.volverA = null; estado.certId = t.dataset.abrir; irA('form'); }
+  else if (t.dataset.pestana) {
+    estado.pestanaExp = t.dataset.pestana;
+    estado.parteExp = (PESTANAS_EXP.find(p => p.id === t.dataset.pestana) || {}).parte || 'todo';
+    render(); window.scrollTo(0, 0);
+  }
+  else if (t.dataset.otroDoc) {
+    const [id, feligres] = t.dataset.otroDoc.split(':');
+    if (feligres) { estado.registro.feligres = feligres; guardarRegistro(); }
+    estado.volverA = 'expediente'; estado.certId = id; irA('form');
+  }
+  else if (t.closest('[data-opcion]')) {
+    estado.registro[t.closest('[data-opcion]').dataset.opcion] = t.dataset.v; guardarRegistro(); render();
+  }
   else if (t.dataset.registro) {
     const a = t.dataset.registro;
     if (a === 'nuevo') crearRegistro();
@@ -772,6 +895,11 @@ document.addEventListener('input', e => {
 document.addEventListener('change', async e => {
   const el = e.target;
   if (el.id === 'selFirma') { estado.firma = +el.value; if (estado.vista === 'menu') render(); else actualizarPrevia(); }
+  else if (el.id === 'parteExp') { estado.parteExp = el.value; actualizarPrevia(); }
+  else if (el.dataset.resuelto) {
+    estado.registro[el.dataset.resuelto] = el.checked ? '1' : ''; guardarRegistro();
+    const det = el.closest('details'); if (det) det.open = !el.checked;
+  }
   else if (el.dataset.img || el.dataset.firma !== undefined) {
     const f = el.files && el.files[0]; if (!f) return;
     try {

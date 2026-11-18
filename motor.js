@@ -71,9 +71,12 @@ const Motor = {
   palabras(texto, negritaBase = false) {
     const res = [];
     let neg = negritaBase;
+    let antes = '';
     String(texto ?? '').split('**').forEach((trozo, i) => {
       if (i > 0) neg = !neg;
-      const pegado = res.length && trozo && !/^\s/.test(trozo); // "**Nombre**, hijo": la coma va pegada
+      // "**Nombre**, hijo": la coma va pegada; "que **nació**" no, porque había espacio antes
+      const pegado = res.length && trozo && !/^\s/.test(trozo) && !/\s$/.test(antes);
+      if (trozo) antes = trozo;
       trozo.split(/\s+/).filter(Boolean).forEach((t, j) => res.push({ t: this.limpiar(t, neg), neg, pegado: pegado && j === 0 }));
     });
     return res;
@@ -272,7 +275,7 @@ const Motor = {
         ['el día', { v: f(d[l + '_f_bau']) }],
         ['libro', { v: d[l + '_libro_bau'], w: .2 }, ' folio', { v: d[l + '_folio_bau'], w: .2 }, ' nº', { v: d[l + '_num_bau'] }],
         ['de', { v: H.edad(d[l + '_f_nac'], ctx.fechaDocumento), w: .3 }, ' años de edad, de estado', { v: d[l + '_estado_civil'] }],
-        [`hij${o} de`, { v: d['padre_' + l], w: .5 }, ' y', { v: d['madre_' + l] }],
+        [`hij${o} de`, { v: H.padre(d, l), w: .5 }, ' y', { v: H.madre(d, l) }],
         [`domiciliad${o} en`, { v: domicilio }],
         ['D.N.I.', { v: d[l + '_dni'] }],
         ['Registro civil', { v: d[l + '_registro_civil'], w: .45 }, ', tomo', { v: d[l + '_tomo_rc'], w: .2 }, ', página', { v: d[l + '_pagina_rc'] }],
@@ -330,11 +333,135 @@ const Motor = {
     return { paginas: [p1, p2] };
   },
 
+
+  /* ---------- EXPEDIENTE MATRIMONIAL: datos sobre el impreso oficial ---------- */
+  _fondos: new Map(),
+  async fondo(n) {
+    if (this._fondos.has(n)) return this._fondos.get(n);
+    const p = fetch(`fondos/expediente-${String(n).padStart(2, '0')}.jpg`).then(r => r.blob()).then(b => new Promise(res => {
+      const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(b);
+    }));
+    this._fondos.set(n, p);
+    return p;
+  },
+
+  // Escribe un dato en gris en su sitio; si no cabe, reduce la letra y, si puede, usa más líneas
+  dato(ops, valor, pos, { tam = 10, color = '#707070', negrita = false } = {}) {
+    const t = String(valor ?? '').replace(/\s+/g, ' ').trim();
+    if (!t || !pos) return;
+    const [x, base, x1 = 548, lineas = 1, ld = 11] = pos;
+    let sz = tam, filas;
+    while (sz >= 6.5) {
+      filas = this.cortar(t, sz, x1 - x, negrita);
+      if (filas.length <= lineas) break;
+      sz -= 0.5;
+    }
+    if (filas.length > lineas) { filas = filas.slice(0, lineas); filas[lineas - 1] = filas[lineas - 1].replace(/.{0,2}$/, '…'); }
+    filas.forEach((f, i) => ops.push(this.texto(f, x, base - 0.21 * sz + i * ld, sz, { color, negrita })));
+  },
+
+  async maquetarExpediente(d, ctx, parte = 'todo') {
+    const cfg = ctx.config, f = ctx.firmante || {}, E = EXPEDIENTE;
+    const corta = v => H.fechaCorta(v);
+    const firma = (ops, pos, tam = 10) => {
+      if (!pos) return;
+      const [, x, base] = pos.length === 3 ? pos : [0, pos[0], pos[1]];
+      if (f.nombre) ops.push(this.texto(f.nombre, x, base - 0.21 * tam, tam, { alinear: 'centro', color: '#707070' }));
+      if (f.cargo) ops.push(this.texto(f.cargo, x, base - 0.21 * tam + tam + 1, tam, { alinear: 'centro', color: '#707070' }));
+    };
+    const paginas = {};
+    const pagina = n => (paginas[n] = paginas[n] || []);
+
+    // 1. Portada
+    {
+      const o = pagina(1), j = (...a) => a.filter(x => x && String(x).trim()).join(' ');
+      const linea = (t, base) => o.push(this.texto(t, 301.5, base - 3.8, 18, { alinear: 'centro', color: '#000000' }));
+      linea('Don ' + j(d.novio_nombre, d.novio_apellido1 || d.novio_apellidos), 448.8);
+      linea('y', 469.8);
+      linea('Doña ' + j(d.novia_nombre, d.novia_apellido1 || d.novia_apellidos), 490.8);
+      if (d.novio_telefono) o.push(this.texto(d.novio_telefono, 477, 440, 12, { color: '#707070' }));
+      if (d.novia_telefono) o.push(this.texto(d.novia_telefono, 477, 483, 12, { color: '#707070' }));
+      const etiqueta = (t, x, base) => {
+        const ancho = this.ancho(t, 14, true), punto = this.ancho('.', 14, true);
+        o.push(this.texto(t + '.'.repeat(Math.max(0, Math.floor((484.6 - x - ancho) / punto))), x, base - 3, 14, { negrita: true, color: '#000000' }));
+      };
+      etiqueta('PARROQUIA ', 49, 549); etiqueta('MUNICIPIO ', 49, 573);
+      o.push(this.texto('AÑO.......................NÚMERO DE EXPEDIENTE ...............................', 64.6, 594, 14, { negrita: true, color: '#000000' }));
+      this.dato(o, (cfg.nombre || '').replace(/^parroquia( de)?\s+/i, ''), [155, 547, 480], { tam: 14, color: '#000000' });
+      this.dato(o, cfg.localidad, [137, 571, 480], { tam: 14, color: '#000000' });
+      if (d.num_expediente) {
+        this.dato(o, (/^(\d{4})/.exec(ctx.fechaDocumento || '') || [])[1], [105, 595, 190], { tam: 14, color: '#000000' });
+        this.dato(o, d.num_expediente, [400, 595, 487], { tam: 14, color: '#000000' });
+      }
+      o.push(this.texto('DOCUMENTOS QUE SE ADJUNTAN', 301.5, 657, 20, { negrita: true, alinear: 'centro', color: '#000000' }));
+      String(d.documentos ?? E.DOCUMENTOS).split('\n').filter(x => x.trim()).slice(0, 8)
+        .forEach((l, i) => this.dato(o, l, [52.3, 697.5 + i * 14, 470], { tam: 12 }));
+    }
+
+    // 2. Datos de los contrayentes
+    {
+      const o = pagina(2);
+      const valor = (k, l) => {
+        if (k === 'padre') return H.padre(d, l);
+        if (k === 'madre') return H.madre(d, l);
+        const v = d[l + '_' + k];
+        return /^f_/.test(k) ? corta(v) : v;
+      };
+      Object.entries(E.datos).forEach(([k, [izq, der]]) => {
+        this.dato(o, valor(k, 'novio'), [izq[0], izq[1], izq[2] || 300, izq[3], izq[4]]);
+        this.dato(o, valor(k, 'novia'), [der[0], der[1], der[2] || 548, der[3], der[4]]);
+      });
+      this.dato(o, [d.parroquia_cursillo, d.fecha_cursillo].filter(Boolean).join(', '), [74, 649, 548]);
+      this.dato(o, [d.parroquia_boda, corta(d.f_mat)].filter(Boolean).join(', '), [74, 679, 548]);
+      this.dato(o, d.domicilio_boda, [74, 710, 548]);
+    }
+
+    // 3-10. Exámenes de los contrayentes y de los testigos
+    [['novio', 'novio_ex_'], ['novia', 'novia_ex_'], ['t1', 't1_'], ['t2', 't2_']].forEach(([quien, pref]) => {
+      Object.entries(E.examen[quien]).forEach(([k, pos]) => {
+        const o = pagina(pos[0]);
+        if (k === 'firma') return firma(o, pos);
+        this.dato(o, d[pref + k], pos.slice(1));
+      });
+    });
+
+    // 11. Diligencias
+    {
+      const o = pagina(11);
+      if (d.diligencia !== 'Dispensa de amonestaciones') {
+        const dias = [d.proclamas_desde, d.proclamas_hasta].filter(Boolean).map(corta);
+        this.dato(o, dias.length > 1 ? `del ${dias[0]} al ${dias[1]}` : dias[0], [68, 144, 548]);
+        this.dato(o, d.proclamas_parroquias, [68, 162, 548]);
+      } else if (d.dispensa_motivo) {
+        // empieza tras «por» y sigue en la línea de puntos de abajo
+        const primera = this.cortar(d.dispensa_motivo, 10, 548 - 408);
+        this.dato(o, primera[0], [408, 276, 548]);
+        this.dato(o, primera.slice(1).join(' '), [68, 290, 548]);
+      }
+      firma(o, [302.5, 203.7], 8);
+      firma(o, [469.5, 316.7], 8);
+      if (d.otra_parroquia) {
+        this.dato(o, d.otra_parroquia, [364, 460, 548, 2, 11]);
+        this.dato(o, d.motivo_otra_parroquia, [257, 488, 548]);
+        firma(o, [469.5, 515.7], 8);
+      }
+    }
+
+    const parteDef = E.partes.find(p => p.id === parte) || E.partes[0];
+    const res = [];
+    for (const n of parteDef.paginas) {
+      const fondo = await this.fondo(n);
+      res.push([{ tipo: 'img', src: fondo, x: 0, y: 0, w: A4.w, h: A4.h }, ...(paginas[n] || [])]);
+    }
+    return { paginas: res };
+  },
+
   /* Maqueta completa de un certificado */
   async maquetar(cert, datos, ctx, conFirma) {
     const cfg = ctx.config;
     const doc = cert.documento(datos, ctx);
     if (doc.formato === 'alegato') return this.maquetarAlegato(datos, ctx);
+    if (doc.formato === 'expediente') return this.maquetarExpediente(datos, ctx, ctx.parteExpediente);
     const color = cfg.color || '#a8322d';
     const IL = doc.interlinea || M.interlinea;
     const partida = doc.formato === 'partida';
@@ -402,12 +529,19 @@ const Motor = {
       : this.texto(doc.cierre, M.izq, yCierre, M.cuerpo));
 
     const firmante = ctx.firmante || {};
-    if (conFirma) {
+    if (conFirma && !doc.sinFirmante) {
       if (cfg.sello) { const im = await this.encajar(cfg.sello, 185, yFdo - 92, 128, 138); if (im) ops.unshift(im); }
       if (firmante.firma) { const im = await this.encajar(firmante.firma, 330, yFdo - 112, 180, 104); if (im) ops.push(im); }
     }
-    ops.push(this.texto('Fdo. ' + (firmante.nombre || '______________________'), M.der, yFdo, M.cuerpo, { alinear: 'der' }));
-    if (firmante.cargo) ops.push(this.texto(firmante.cargo, M.der, yFdo + huecoCargo, M.cuerpo, { alinear: 'der' }));
+    if (!doc.sinFirmante) {
+      ops.push(this.texto('Fdo. ' + (firmante.nombre || '______________________'), M.der, yFdo, M.cuerpo, { alinear: 'der' }));
+      if (firmante.cargo) ops.push(this.texto(firmante.cargo, M.der, yFdo + huecoCargo, M.cuerpo, { alinear: 'der' }));
+    }
+    if (doc.firmaIzquierda) ops.push(this.texto(doc.firmaIzquierda, M.izq, yFdo, M.cuerpo));
+    if (doc.firmaVicario) {
+      ops.push({ tipo: 'linea', x1: 200, y1: 770, x2: 430, y2: 770, color: '#bbbbbb', grosor: 0.6 });
+      doc.firmaVicario.filter(Boolean).forEach((t, i) => ops.push(this.texto(t, 190, 770 + i * 13, 10, { alinear: 'der' })));
+    }
 
     if (doc.pie === 'tablaComunicacion') ops.push(...this.tablaComunicacion());
     if (doc.pie === 'exhorto') ops.push(...this.pieExhorto(doc.pieTexto));
