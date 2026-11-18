@@ -79,6 +79,24 @@ const C = {
 };
 const con = (campo, cambios) => Object.assign({}, campo, cambios);
 
+// Certificado para ser padrino/madrina (bautismo o confirmación)
+function padrinoDe(id, grupo, sacramento) {
+  return {
+    id, grupo, estado: 'listo',
+    nombre: 'Autorización para ser padrino', titulo: `Autorización para ser padrino de ${sacramento}`,
+    campos: [C.nombre, C.apellidos, C.sexo, con(C.dni, { nueva: true })],
+    documento: (d) => ({
+      titulo: `CERTIFICADO\nPARA SER ${H.g(d, 'PADRINO', 'MADRINA')} DE ${sacramento.toUpperCase()}`,
+      bloques: [
+        { linea: A_QUIEN },
+        { p: `Certifico que ${H.nombre(d)} ha realizado la preparación suficiente y conoce las obligaciones que se derivan de su condición de ${H.g(d, 'padrino', 'madrina')} de ${sacramento}.`, espacio: 1 },
+        { p: 'Estimamos por el conocimiento que tenemos que está en condiciones y tiene intención de cumplir estas obligaciones.', espacio: 1 },
+      ],
+      cierre: CIERRE_CERTIFICO, cierreEspacio: 2
+    })
+  };
+}
+
 const CERTIFICADOS = [
   /* ---------------- CATEQUESIS ---------------- */
   {
@@ -169,20 +187,7 @@ const CERTIFICADOS = [
       cierre: CIERRE_CERTIFICO
     })
   },
-  {
-    id: 'padrino', grupo: 'bautismo', estado: 'listo',
-    nombre: 'Autorización para ser padrino', titulo: 'Autorización para ser padrino de bautismo',
-    campos: [C.nombre, C.apellidos, C.sexo, con(C.dni, { nueva: true })],
-    documento: (d) => ({
-      titulo: `CERTIFICADO\nPARA SER ${H.g(d, 'PADRINO', 'MADRINA')} DE BAUTISMO`,
-      bloques: [
-        { linea: A_QUIEN },
-        { p: `Certifico que ${H.nombre(d)} ha realizado la preparación suficiente y conoce las obligaciones que se derivan de su condición de ${H.g(d, 'padrino', 'madrina')} de bautismo.`, espacio: 1 },
-        { p: 'Estimamos por el conocimiento que tenemos que está en condiciones y tiene intención de cumplir estas obligaciones.', espacio: 1 },
-      ],
-      cierre: CIERRE_CERTIFICO, cierreEspacio: 2
-    })
-  },
+  padrinoDe('padrino', 'bautismo', 'bautismo'),
 
   /* ---------------- MATRIMONIO ---------------- */
   {
@@ -382,6 +387,7 @@ const CERTIFICADOS = [
       cierre: CIERRE_CERTIFICO, cierreEspacio: 1.5, firmaEspacio: 4
     })
   },
+  padrinoDe('padrino_confirmacion', 'confirmacion', 'confirmación'),
 ];
 
 const GRUPOS = [

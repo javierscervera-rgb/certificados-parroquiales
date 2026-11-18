@@ -30,6 +30,7 @@ Aplicación web para generar los certificados que se usan habitualmente en las p
 | Matrimonio | Expediente, amonestaciones activas, registro civil | ⏳ falta pantalla y modelo |
 | Confirmación | Certificado de confirmación | ✅ |
 | Confirmación | Comunicación de confirmación | ✅ |
+| Confirmación | Certificado para ser padrino/madrina de confirmación | ✅ |
 
 ## Estructura
 
