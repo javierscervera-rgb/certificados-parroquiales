@@ -31,7 +31,7 @@ Aplicación web para generar los certificados que se usan habitualmente en las p
 | Matrimonio | Partida de matrimonio (libro, folio y número del libro de matrimonios; ministro) | ✅ |
 | Matrimonio | Fe de vida y estado (novio y novia) · Atestado de libertad (desde el expediente) | ✅ |
 | Matrimonio | Amonestaciones activas: lista (se llena sola desde la última página del expediente, se borra 5 días después de la fecha final) y edicto con varias parejas (solo imprimir o guardar) | ✅ |
-| Matrimonio | Registro civil | ⏳ falta el modelo |
+| Matrimonio | Certificación eclesiástica de matrimonio para el Registro Civil (4 ejemplares sobre el impreso oficial; solo imprimir o guardar) | ✅ |
 | Confirmación | Certificado de confirmación | ✅ |
 | Confirmación | Comunicación de confirmación | ✅ |
 | Confirmación | Certificado para ser padrino/madrina de confirmación | ✅ |

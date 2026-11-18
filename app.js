@@ -557,7 +557,7 @@ function vistaFormulario() {
     // si solo se escribieron los apellidos juntos en otro certificado, se aprovechan
     ['novio', 'novia'].forEach(l => { if (!d[l + '_apellido1'] && !d[l + '_apellido2'] && d[l + '_apellidos']) d[l + '_apellido1'] = d[l + '_apellidos']; });
     const columna = (lado, titulo) => `<div class="columna-pareja"><h4>${titulo}</h4><div class="rejilla">${
-      cert.camposPareja.map(f => campoHTML({ ...f, k: f.clave ? f.clave(lado) : `${lado}_${f.k}` })).join('')}</div></div>`;
+      cert.camposPareja.filter(f => !f.solo || f.solo === lado).map(f => campoHTML({ ...f, k: f.clave ? f.clave(lado) : `${lado}_${f.k}` })).join('')}</div></div>`;
     campos = `<div class="pareja">${columna('novio', 'El contrayente')}${columna('novia', 'La contrayente')}</div>` + campos;
   }
 
@@ -586,7 +586,7 @@ function vistaFormulario() {
           <button class="acc" data-pdf="1" ${listo ? '' : 'disabled'}>${IC.pluma}<span>Con firma<small>Con sello y firma escaneada</small></span></button>
           <button class="acc" data-pdf="0" ${listo ? '' : 'disabled'}>${IC.pdf.replace('M12 10v7M9 14l3 3 3-3', 'M9 12h6M9 16h6')}<span>Sin firma<small>Para firmar a mano</small></span></button>
         </div>
-        <button class="acc" data-correo ${listo ? '' : 'disabled'}>${IC.mail}<span>Enviar por mail<small>PDF adjunto, desde tu Gmail</small></span></button>
+        ${cert.sinCorreo ? '' : `<button class="acc" data-correo ${listo ? '' : 'disabled'}>${IC.mail}<span>Enviar por mail<small>PDF adjunto, desde tu Gmail</small></span></button>`}
       </div>
     </div>
   </main>`;
@@ -829,7 +829,7 @@ function vistaExpediente(cert) {
   const partes = EXPEDIENTE.partes.map(p => `<option value="${p.id}" ${p.id === estado.parteExp ? 'selected' : ''}>${p.nombre}</option>`).join('');
   const otros = [
     ['alegato', 'Alegato V'], ['exhorto:Novio', 'Exhorto amonest. novio'], ['exhorto:Novia', 'Exhorto amonest. novia'],
-    ['fe_vida_novio', 'Fe de vida y estado novio'], ['fe_vida_novia', 'Fe de vida y estado novia'], ['atestado', 'Atestado de libertad'],
+    ['fe_vida_novio', 'Fe de vida y estado novio'], ['fe_vida_novia', 'Fe de vida y estado novia'], ['atestado', 'Atestado de libertad'], ['registro_civil', 'Certificado registro civil'],
   ].map(([id, n]) => `<button class="btn" data-otro-doc="${id}">${n}</button>`).join('') + `<button class="btn" data-otro-doc="amonestaciones">Amonestaciones activas (edicto)</button>`;
   return `
   ${cabecera(esc(cert.titulo))}

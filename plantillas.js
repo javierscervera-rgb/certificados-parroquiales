@@ -514,7 +514,30 @@ const CERTIFICADOS = [
       };
     }
   },
-  { id: 'registro_civil', grupo: 'matrimonio', estado: 'pendiente', nombre: 'Certificado registro civil', titulo: 'Certificado registro civil', campos: [] },
+  {
+    id: 'registro_civil', grupo: 'matrimonio', estado: 'listo', sinCorreo: true,
+    nombre: 'Certificado registro civil', titulo: 'Certificación eclesiástica de matrimonio para el Registro Civil',
+    // Los datos de los novios son los mismos del expediente y el Alegato V; se añaden los que pide el impreso
+    camposPareja: [
+      ...['nombre', 'apellido1', 'apellido2'].map(k => CAMPOS_PAREJA.find(f => f.k === k)),
+      { k: 'lugar_nac', label: 'Lugar de nacimiento', w: 4, sep: true }, { k: 'provincia_nac', label: 'Provincia', w: 4 },
+      { k: 'f_nac', label: 'Fecha de nacimiento', tipo: 'date', w: 4 },
+      ...['padre_nombre', 'padre_apellidos', 'madre_nombre', 'madre_apellidos'].map(k => CAMPOS_PAREJA.find(f => f.k === k)),
+      { k: 'registro_civil', label: 'Registro civil (nacimiento)', w: 6, sep: true }, { k: 'tomo_rc', label: 'Tomo', w: 3 }, { k: 'pagina_rc', label: 'Página', w: 3 },
+      { k: 'estado_civil', label: 'Estado civil previo', w: 6, sep: true, ph: 'SOLTERO/A' }, { k: 'nacionalidad', label: 'Nacionalidad', w: 6 },
+      { k: 'dni', label: 'D.N.I.', w: 6 }, { k: 'profesion', label: 'Profesión', w: 6 },
+      { k: 'derecho', label: 'Sujeto al derecho', ph: 'común, foral…', w: 12, solo: 'novio' },
+      { k: 'res_calle', label: 'Residencia: calle', w: 9, sep: true }, { k: 'res_num', label: 'Núm.', w: 3 },
+      { k: 'res_municipio', label: 'Municipio', w: 6 }, { k: 'res_provincia', label: 'Provincia', w: 6 },
+    ],
+    campos: [
+      { ...C.f_mat, label: 'Fecha de la boda', sep: true }, { k: 'hora_boda', label: 'Hora', tipo: 'time', w: 2 },
+      { k: 'iglesia_boda', label: 'La iglesia', ph: 'parroquial', w: 4 },
+      { k: 'residencia_municipio', label: 'Domicilio después de la boda: municipio', w: 6, nueva: true }, { k: 'residencia_provincia', label: 'Provincia', w: 6 },
+      { k: 'observaciones_rc', label: 'Observaciones', tipo: 'textarea', w: 12, sep: true },
+    ],
+    documento: () => ({ formato: 'registro_civil' })
+  },
   {
     id: 'comunicacion_matrimonio', grupo: 'matrimonio', estado: 'listo',
     nombre: 'Comunicación de matrimonio', titulo: 'Comunicación de matrimonio a otras parroquias para inscripción',

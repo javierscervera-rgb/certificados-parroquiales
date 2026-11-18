@@ -337,22 +337,23 @@ const Motor = {
 
   /* ---------- EXPEDIENTE MATRIMONIAL: datos sobre el impreso oficial ---------- */
   _fondos: new Map(),
-  async fondo(n) {
-    if (this._fondos.has(n)) return this._fondos.get(n);
-    const p = fetch(`fondos/expediente-${String(n).padStart(2, '0')}.jpg`).then(r => r.blob()).then(b => new Promise(res => {
+  async fondo(n, impreso = 'expediente') {
+    const clave = impreso + n;
+    if (this._fondos.has(clave)) return this._fondos.get(clave);
+    const p = fetch(`fondos/${impreso}-${String(n).padStart(2, '0')}.jpg`).then(r => r.blob()).then(b => new Promise(res => {
       const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(b);
     }));
-    this._fondos.set(n, p);
+    this._fondos.set(clave, p);
     return p;
   },
 
   // Escribe un dato en gris en su sitio; si no cabe, reduce la letra y, si puede, usa más líneas
-  dato(ops, valor, pos, { tam = 10, color = '#707070', negrita = false } = {}) {
+  dato(ops, valor, pos, { tam = 10, color = '#707070', negrita = false, minTam = 6.5 } = {}) {
     const t = String(valor ?? '').replace(/\s+/g, ' ').trim();
     if (!t || !pos) return;
     const [x, base, x1 = 548, lineas = 1, ld = 11] = pos;
     let sz = tam, filas;
-    while (sz >= 6.5) {
+    while (sz >= minTam) {
       filas = this.cortar(t, sz, x1 - x, negrita);
       if (filas.length <= lineas) break;
       sz -= 0.5;
@@ -520,6 +521,59 @@ const Motor = {
     return { paginas };
   },
 
+
+  /* ---------- CERTIFICACIÓN PARA EL REGISTRO CIVIL (4 ejemplares sobre el impreso oficial) ---------- */
+  async maquetarRegistroCivil(d, ctx, conFirma) {
+    const cfg = ctx.config, f = ctx.firmante || {};
+    const MAY = v => String(v || '').toLocaleUpperCase('es');
+    const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    const partes = v => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v || ''); return m ? { d: String(+m[3]), m: MESES[+m[2] - 1], a: m[1] } : { d: '', m: '', a: '' }; };
+    const parroquia = (cfg.nombre || '').replace(/^parroquia( de)?\s+/i, '');
+    const v = {
+      firmante: f.nombre, parroquia,
+      iglesia: d.iglesia_boda || 'parroquial', parroquia_boda: parroquia,
+      residencia_municipio: MAY(d.residencia_municipio), residencia_provincia: MAY(d.residencia_provincia),
+    };
+    ['novio', 'novia'].forEach(l => {
+      const n = partes(d[l + '_f_nac']);
+      const insc = [MAY(d[l + '_registro_civil']), d[l + '_tomo_rc'] && 't. ' + d[l + '_tomo_rc'], d[l + '_pagina_rc'] && 'p. ' + d[l + '_pagina_rc']].filter(Boolean).join(', ');
+      Object.assign(v, {
+        [l + '_nombre']: MAY(H.persona(d, l)), [l + '_dni']: MAY(d[l + '_dni']), [l + '_estado']: MAY(d[l + '_estado_civil']),
+        [l + '_padre']: MAY(H.padre(d, l)), [l + '_madre']: MAY(H.madre(d, l)),
+        [l + '_dia']: n.d, [l + '_mes']: MAY(n.m), [l + '_anio']: n.a,
+        [l + '_lugar']: MAY(d[l + '_lugar_nac']), [l + '_prov_nac']: MAY(d[l + '_provincia_nac']),
+        [l + '_inscrito']: insc, [l + '_nacionalidad']: MAY(d[l + '_nacionalidad']),
+        [l + '_calle']: MAY(d[l + '_res_calle']), [l + '_num']: MAY(d[l + '_res_num']),
+        [l + '_municipio']: MAY(d[l + '_res_municipio']), [l + '_provincia']: MAY(d[l + '_res_provincia']),
+        [l + '_profesion']: MAY(d[l + '_profesion']),
+      });
+    });
+    v.novio_derecho = MAY(d.novio_derecho);
+    const b = partes(d.f_mat);
+    Object.assign(v, { boda_anio: b.a, boda_mes: b.m, boda_dia: b.d, boda_hora: d.hora_boda || '' });
+    // observaciones: lo que no cabe en la primera línea sigue en la segunda
+    const obs = String(d.observaciones_rc || '').replace(/\s+/g, ' ').trim();
+
+    const res = [];
+    for (let n = 1; n <= 4; n++) {
+      const P = REGISTRO_CIVIL.paginas[n - 1];
+      const ops = [{ tipo: 'img', src: await this.fondo(n, 'registro-civil'), x: 0, y: 0, w: A4.w, h: A4.h }];
+      Object.entries(v).forEach(([k, val]) => { if (P[k]) this.dato(ops, val, P[k], { tam: 8, color: '#555555', minTam: /^residencia_/.test(k) ? 5 : 6.5 }); });
+      if (obs) {
+        const [x, , x1] = P.observaciones, primera = this.cortar(obs, 8, x1 - x);
+        this.dato(ops, primera[0], P.observaciones, { tam: 8, color: '#555555' });
+        this.dato(ops, primera.slice(1).join(' '), P.observaciones2, { tam: 8, color: '#555555' });
+      }
+      if (conFirma) {
+        const [fx, fy] = P.firma;
+        if (cfg.sello) { const im = await this.encajar(cfg.sello, fx - 8, fy - 46, 78, 80); if (im) ops.push(im); }
+        if (f.firma) { const im = await this.encajar(f.firma, fx + 10, fy - 38, 110, 62); if (im) ops.push(im); }
+      }
+      res.push(ops);
+    }
+    return { paginas: res };
+  },
+
   /* Maqueta completa de un certificado */
   async maquetar(cert, datos, ctx, conFirma) {
     const cfg = ctx.config;
@@ -527,6 +581,7 @@ const Motor = {
     if (doc.formato === 'alegato') return this.maquetarAlegato(datos, ctx);
     if (doc.formato === 'expediente') return this.maquetarExpediente(datos, ctx, ctx.parteExpediente);
     if (doc.formato === 'edicto') return this.maquetarEdicto(ctx, conFirma);
+    if (doc.formato === 'registro_civil') return this.maquetarRegistroCivil(datos, ctx, conFirma);
     const color = cfg.color || '#a8322d';
     const IL = doc.interlinea || M.interlinea;
     const partida = doc.formato === 'partida';
