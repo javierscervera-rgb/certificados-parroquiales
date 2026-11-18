@@ -220,6 +220,7 @@ const IC = {
   pdf: '<svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M12 10v7M9 14l3 3 3-3"/></svg>',
   pluma: '<svg viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M14 4l4 4-9 9H5v-4z"/></svg>',
   imprimir: '<svg viewBox="0 0 24 24"><path d="M7 9V3h10v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/></svg>',
+  guardar: '<svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5"/><path d="M4 19h16"/></svg>',
   mail: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>',
   buscar: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>',
   ant: '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
@@ -371,9 +372,14 @@ function vistaFormulario() {
         <button class="acc" data-ir="menu">${IC.menu}Menú principal</button>
         <button class="acc" data-registro="nuevo">${IC.nuevo}Nuevo registro</button>
         <button class="miniatura" id="previa" title="Pulsa para ampliar" ${listo ? '' : 'disabled'}></button>
-        <button class="acc prim" data-imprimir="1" ${listo ? '' : 'disabled'}>${IC.imprimir}<span>Imprimir con firma<small>Con sello y firma escaneada</small></span></button>
-        <button class="acc" data-imprimir="0" ${listo ? '' : 'disabled'}>${IC.imprimir}<span>Imprimir sin firma<small>Para firmar a mano</small></span></button>
-        <div class="descargas"><span>Descargar PDF:</span><button class="btn" data-pdf="1" ${listo ? '' : 'disabled'}>con firma</button><button class="btn" data-pdf="0" ${listo ? '' : 'disabled'}>sin firma</button></div>
+        <div class="grupo-acc"><span>${IC.imprimir}Imprimir</span>
+          <button class="acc prim" data-imprimir="1" ${listo ? '' : 'disabled'}>${IC.pluma}<span>Con firma<small>Con sello y firma escaneada</small></span></button>
+          <button class="acc" data-imprimir="0" ${listo ? '' : 'disabled'}>${IC.pdf.replace('M12 10v7M9 14l3 3 3-3', 'M9 12h6M9 16h6')}<span>Sin firma<small>Para firmar a mano</small></span></button>
+        </div>
+        <div class="grupo-acc"><span>${IC.guardar}Guardar PDF</span>
+          <button class="acc" data-pdf="1" ${listo ? '' : 'disabled'}>${IC.pluma}<span>Con firma<small>Con sello y firma escaneada</small></span></button>
+          <button class="acc" data-pdf="0" ${listo ? '' : 'disabled'}>${IC.pdf.replace('M12 10v7M9 14l3 3 3-3', 'M9 12h6M9 16h6')}<span>Sin firma<small>Para firmar a mano</small></span></button>
+        </div>
         <button class="acc" data-correo ${listo ? '' : 'disabled'}>${IC.mail}<span>Enviar por mail<small>PDF adjunto, desde tu Gmail</small></span></button>
       </div>
     </div>
@@ -449,9 +455,11 @@ async function descargarPDF(conFirma) {
     try { await estado.descargas.save({ filename: nombre, data: blob }); aviso('PDF guardado. Ábrelo para imprimirlo.'); return; }
     catch (e) { if (e && e.code === 'declined') return; }
   }
+  // Se guarda directamente en la carpeta de descargas
   const url = URL.createObjectURL(blob);
-  const w = window.open(url, '_blank');
-  if (!w) { const a = document.createElement('a'); a.href = url; a.download = nombre; document.body.appendChild(a); a.click(); a.remove(); }
+  const a = document.createElement('a'); a.href = url; a.download = nombre;
+  document.body.appendChild(a); a.click(); a.remove();
+  aviso('PDF guardado en Descargas.');
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 

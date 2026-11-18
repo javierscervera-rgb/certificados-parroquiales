@@ -146,9 +146,10 @@
   .hoja-grande svg { width: min(66.4vh, calc(100vw - 40px)); height: auto; display: block; box-shadow: 0 10px 40px rgba(0,0,0,.4); }
   .modal .cerrar { position: fixed; top: 16px; right: 16px; width: 40px; height: 40px; border-radius: 50%; border: 0; background: #fff; font-size: 18px; }
 
-  .descargas { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--suave); flex-wrap: wrap; }
-  .descargas span { flex: 1 0 100%; }
-  .descargas .btn { flex: 1; padding: 6px 8px; font-size: 12px; }
+  .grupo-acc { display: grid; gap: 6px; background: rgba(255,255,255,.45); border: 1px solid var(--borde); border-radius: 12px; padding: 8px; }
+  .grupo-acc > span { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--suave); padding: 2px 4px; }
+  .grupo-acc > span svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+  .grupo-acc .acc { padding: 9px 10px; }
   .acc { display: flex; align-items: center; gap: 10px; text-align: left; background: #fff; border: 1px solid var(--borde); border-radius: 10px; padding: 11px 12px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--tinta); }
   .acc:hover:not(:disabled) { border-color: var(--azul-2); }
   .acc svg { width: 22px; height: 22px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.6; }
@@ -221,6 +222,7 @@
     .rejilla .campo { grid-column: 1 / -1 !important; }
     .lateral { position: static; display: grid; grid-template-columns: 1fr 1fr; }
     .miniatura { grid-row: span 3; }
+    .grupo-acc { grid-column: 1 / -1; }
     .grupo { grid-template-columns: 1fr; }
     .botonera { grid-template-columns: 1fr 1fr; }
     .botonera .peligro { grid-column: 1 / -1; }
