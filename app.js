@@ -463,30 +463,43 @@ const PESTANAS_EXP = [
   { id: 'ultima', nombre: 'Última página', parte: 'ultima' },
 ];
 
-// Bloques del examen: empiezan plegados; al jurar se abre el primero y al marcar «Resuelto» se pasa al siguiente
-function bloquesAbiertos(pref) {
+// Bloques del examen, en orden:
+// - bloqueado (plegado, no se puede abrir) hasta jurar/prometer y, después, hasta resolver el anterior;
+// - el que toca rellenar está abierto y no se pliega;
+// - los resueltos se pliegan solos y luego se abren y cierran a mano.
+function bloquesAbiertos(pref) {   // resueltos que el usuario ha abierto a mano
   const clave = `${estado.actualId}:${pref}`;
-  if (!estado.abiertos[clave]) {
-    const d = estado.registro, n = pref.startsWith('t') ? EXPEDIENTE.testigo.length : EXPEDIENTE.contrayente('novio').length;
-    const set = new Set();
-    if (d[pref + 'juramento']) for (let i = 1; i <= n; i++) if (d[`${pref}res_${i}`] !== '1') { set.add(i); break; }
-    estado.abiertos[clave] = set;
-  }
-  return estado.abiertos[clave];
+  return (estado.abiertos[clave] = estado.abiertos[clave] || new Set());
+}
+function estadoBloque(pref, i) {
+  const d = estado.registro;
+  if (!d[pref + 'juramento']) return 'bloqueado';
+  for (let j = 1; j < i; j++) if (d[`${pref}res_${j}`] !== '1') return 'bloqueado';
+  return d[`${pref}res_${i}`] === '1' ? 'resuelto' : 'actual';
+}
+function abiertoBloque(pref, i) {
+  const e = estadoBloque(pref, i);
+  return e === 'actual' || (e === 'resuelto' && bloquesAbiertos(pref).has(i));
 }
 function aplicarBloques(pref) {
-  const set = bloquesAbiertos(pref);
-  document.querySelectorAll(`details.seccion-exp[data-pref="${pref}"]`).forEach(det => { det.open = set.has(+det.dataset.i); });
+  document.querySelectorAll(`details.seccion-exp[data-pref="${pref}"]`).forEach(det => {
+    const i = +det.dataset.i, e = estadoBloque(pref, i);
+    det.dataset.estado = e;
+    det.open = abiertoBloque(pref, i);
+    const chk = det.querySelector('[data-resuelto]');
+    chk.disabled = e === 'bloqueado';
+  });
 }
 
 function seccionesHTML(secciones, pref) {
-  const d = estado.registro, abiertos = bloquesAbiertos(pref);
+  const d = estado.registro;
   return secciones.map((sec, i) => {
+    const est = estadoBloque(pref, i + 1);
     const resuelto = d[`${pref}res_${i + 1}`] === '1';
     const preguntas = sec.preguntas.map(q => campoHTML({ ...q, k: pref + q.k, w: q.w || 12, ph: q.ph })).join('');
-    return `<details class="seccion-exp" data-pref="${pref}" data-i="${i + 1}" style="--color:${sec.color}" ${abiertos.has(i + 1) ? 'open' : ''}>
+    return `<details class="seccion-exp" data-pref="${pref}" data-i="${i + 1}" data-estado="${est}" style="--color:${sec.color}" ${abiertoBloque(pref, i + 1) ? 'open' : ''}>
       <summary><span>${i + 1}. ${esc(sec.seccion)}</span>
-        <label class="resuelto" title="Marca la sección como resuelta: se pliega y se abre la siguiente"><input type="checkbox" data-resuelto="${pref}res_${i + 1}" ${resuelto ? 'checked' : ''}> Resuelto</label></summary>
+        <label class="resuelto" title="Marca la sección como resuelta: se pliega y se abre la siguiente"><input type="checkbox" data-resuelto="${pref}res_${i + 1}" ${resuelto ? 'checked' : ''} ${est === 'bloqueado' ? 'disabled' : ''}> Resuelto</label></summary>
       <div class="rejilla">${preguntas}</div>
     </details>`;
   }).join('');
@@ -876,6 +889,8 @@ document.addEventListener('keydown', e => {
 /* ---------------- EVENTOS ---------------- */
 document.addEventListener('click', async e => {
   Google.renovarSiHaceFalta();
+  const sumario = e.target.closest('details.seccion-exp > summary');
+  if (sumario && !e.target.closest('.resuelto') && sumario.parentElement.dataset.estado !== 'resuelto') { e.preventDefault(); return; }
   if (e.target.closest('summary .resuelto')) { e.stopPropagation(); if (e.target.tagName !== 'INPUT') { e.preventDefault(); e.target.closest('.resuelto').querySelector('input').click(); } return; }
   const t = e.target.closest('button'); if (!t) return;
   if (t.dataset.tam) cambiarEscala(+t.dataset.tam);
@@ -973,33 +988,28 @@ document.addEventListener('input', e => {
 document.addEventListener('toggle', e => {
   const det = e.target;
   if (!det.classList || !det.classList.contains('seccion-exp')) return;
-  const set = bloquesAbiertos(det.dataset.pref), i = +det.dataset.i;
+  const pref = det.dataset.pref, i = +det.dataset.i;
+  if (estadoBloque(pref, i) !== 'resuelto') { if (det.open !== abiertoBloque(pref, i)) det.open = abiertoBloque(pref, i); return; }
+  const set = bloquesAbiertos(pref);
   if (det.open) set.add(i); else set.delete(i);
 }, true);
 
 document.addEventListener('change', async e => {
   const el = e.target;
   if (/(_ex_|^t[12]_)juramento$/.test(el.dataset.k || '')) {
-    const pref = el.dataset.k.replace(/juramento$/, ''), set = bloquesAbiertos(pref);
-    set.clear();
-    if (el.value) {
-      const primero = [...document.querySelectorAll(`details.seccion-exp[data-pref="${pref}"]`)].find(x => !x.querySelector('[data-resuelto]').checked);
-      if (primero) set.add(+primero.dataset.i);
-    }
-    setTimeout(() => aplicarBloques(pref));
+    const pref = el.dataset.k.replace(/juramento$/, '');
+    estado.registro[el.dataset.k] = el.value;
+    setTimeout(() => { aplicarBloques(pref); const det = document.querySelector(`details.seccion-exp[data-pref="${pref}"][data-estado="actual"]`); if (det && el.value) det.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
   }
   if (el.id === 'selFirma') { estado.firma = +el.value; if (estado.vista === 'menu') render(); else actualizarPrevia(); }
   else if (el.id === 'parteExp') { estado.parteExp = el.value; actualizarPrevia(); }
   else if (el.dataset.resuelto) {
     estado.registro[el.dataset.resuelto] = el.checked ? '1' : ''; guardarRegistro();
-    const det = el.closest('details'), pref = det.dataset.pref, i = +det.dataset.i, set = bloquesAbiertos(pref);
-    if (el.checked) {
-      set.delete(i);
-      const todos = [...document.querySelectorAll(`details.seccion-exp[data-pref="${pref}"]`)];
-      const sig = todos.find(x => +x.dataset.i > i && !x.querySelector('[data-resuelto]').checked);
-      if (sig) { set.add(+sig.dataset.i); aplicarBloques(pref); sig.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
-      else aplicarBloques(pref);
-    } else { set.add(i); aplicarBloques(pref); }
+    const det = el.closest('details'), pref = det.dataset.pref, i = +det.dataset.i;
+    bloquesAbiertos(pref).delete(i);
+    aplicarBloques(pref);
+    const sig = document.querySelector(`details.seccion-exp[data-pref="${pref}"][data-estado="actual"]`);
+    if (el.checked && sig) sig.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
   else if (el.dataset.img || el.dataset.firma !== undefined) {
     const f = el.files && el.files[0]; if (!f) return;

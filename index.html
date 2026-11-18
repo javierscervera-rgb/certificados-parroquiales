@@ -162,6 +162,12 @@
   .seccion-exp .resuelto { display: inline-flex; align-items: center; gap: 6px; color: #8f2a2a; font-weight: 600; text-transform: none; letter-spacing: 0; white-space: nowrap; }
   .seccion-exp .resuelto input { width: 18px; height: 18px; accent-color: var(--azul); }
   .seccion-exp > .rejilla { padding-bottom: 14px; }
+  .seccion-exp[data-estado="bloqueado"] { opacity: .55; }
+  .seccion-exp[data-estado="bloqueado"] summary, .seccion-exp[data-estado="actual"] summary { cursor: default; }
+  .seccion-exp[data-estado="bloqueado"] summary > span::before { content: '🔒'; font-size: 11px; transform: none; }
+  .seccion-exp[data-estado="actual"] summary > span::before { content: '▾'; transform: none; }
+  .seccion-exp[data-estado="bloqueado"] .resuelto { visibility: hidden; }
+  .seccion-exp[data-estado="actual"] { box-shadow: 0 0 0 2px var(--azul) inset; }
   .seccion-exp .campo label { white-space: normal; text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 500; color: var(--tinta); line-height: 1.35; }
   .opciones-dil { max-width: 520px; }
   .grupo-acc select { width: 100%; }
