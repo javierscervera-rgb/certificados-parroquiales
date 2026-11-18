@@ -47,9 +47,7 @@ const Google = (() => {
         prompt: silencioso ? '' : undefined,
         callback: r => {
           if (r.error) return rej(new Error(r.error_description || r.error));
-          st.token = r.access_token;
-          st.expira = Date.now() + (Number(r.expires_in) || 3600) * 1000;
-          String(r.scope || '').split(' ').forEach(s => st.scopes.add(s));
+          guardarToken(r.access_token, r.expires_in, r.scope);
           res(r);
         },
         error_callback: e => rej(new Error(e?.message || e?.type || 'Se canceló el acceso a Google.')),
@@ -58,6 +56,60 @@ const Google = (() => {
     });
   }
   const tokenVivo = () => st.token && Date.now() < st.expira - 60000;
+  function guardarToken(token, expiraEn, scopes) {
+    st.token = token;
+    st.expira = Date.now() + (Number(expiraEn) || 3600) * 1000;
+    String(scopes || '').split(' ').filter(Boolean).forEach(x => st.scopes.add(x));
+    recordar('scopes', [...st.scopes]);
+    try { sessionStorage.setItem('certificados.g.token', JSON.stringify({ t: st.token, e: st.expira, s: [...st.scopes] })); } catch (e) {}
+  }
+
+  /* ---------- Conexión automática al abrir la aplicación ----------
+     Si este navegador ya se conectó antes, la página va directamente a Google
+     (sin ventana emergente, que los navegadores bloquean si no hay un clic).
+     Con la sesión de Google abierta y el permiso ya dado, Google devuelve el
+     acceso sin mostrar nada y la página vuelve conectada. */
+  const SS = { estado: 'certificados.g.state', intento: 'certificados.g.intentado' };
+  const vuelta = () => location.origin + location.pathname;
+  function irAGoogle(scopes) {
+    const aleatorio = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    try { sessionStorage.setItem(SS.estado, aleatorio); sessionStorage.setItem(SS.intento, '1'); } catch (e) {}
+    const p = new URLSearchParams({
+      client_id: window.GOOGLE_CLIENT_ID, redirect_uri: vuelta(), response_type: 'token',
+      scope: scopes.join(' '), include_granted_scopes: 'true', prompt: 'none', state: aleatorio,
+    });
+    const email = recuerdo('email'); if (email) p.set('login_hint', email);
+    location.replace('https://accounts.google.com/o/oauth2/v2/auth?' + p.toString());
+  }
+  function leerVuelta() {
+    const h = location.hash || '';
+    if (!/access_token=|error=/.test(h)) return null;
+    const p = new URLSearchParams(h.slice(1));
+    history.replaceState(null, '', location.pathname + location.search);
+    let esperado = null; try { esperado = sessionStorage.getItem(SS.estado); } catch (e) {}
+    if (!esperado || p.get('state') !== esperado) return { error: 'state' };
+    if (p.get('error')) return { error: p.get('error') };
+    return { token: p.get('access_token'), expira: p.get('expires_in'), scope: p.get('scope') };
+  }
+  async function autoconectar() {
+    if (!configurado()) return false;
+    const r = leerVuelta();
+    if (r && !r.error) { guardarToken(r.token, r.expira, r.scope); await completarConexion(); return true; }
+    if (r && r.error) { fijarEstado('desconectado'); return false; } // p. ej. hay que elegir cuenta: se hará con el botón
+    // ¿queda un acceso válido de esta misma pestaña?
+    try {
+      const g = JSON.parse(sessionStorage.getItem('certificados.g.token') || 'null');
+      if (g && Date.now() < g.e - 60000) { st.token = g.t; st.expira = g.e; g.s.forEach(x => st.scopes.add(x)); await completarConexion(); return true; }
+    } catch (e) {}
+    let intentado = false; try { intentado = !!sessionStorage.getItem(SS.intento); } catch (e) {}
+    if (recuerdo('conectado') && !intentado) {
+      fijarEstado('conectando', 'Conectando con Google Drive…');
+      const scopes = (recuerdo('scopes') || [SCOPE_DRIVE]).filter(x => x === SCOPE_DRIVE || x === SCOPE_GMAIL);
+      irAGoogle(scopes.length ? scopes : [SCOPE_DRIVE]);
+      return true;
+    }
+    return false;
+  }
 
   async function api(url, opciones = {}) {
     if (!tokenVivo()) { fijarEstado('caducado', 'La sesión de Google ha caducado. Pulsa para reconectar.'); throw new Error('caducado'); }
@@ -182,25 +234,33 @@ const Google = (() => {
     if (st.pendiente.config || st.pendiente.registros) await subir();
   }
 
-  async function conectar() {
-    if (!disponible()) { fijarEstado('error', configurado() ? 'No se pudo cargar el inicio de sesión de Google.' : 'Falta configurar la conexión con Google.'); return; }
+  async function completarConexion() {
     fijarEstado('conectando', 'Conectando con Google Drive…');
-    const peticion = pedirToken([SCOPE_DRIVE]); // dentro del clic
     try {
-      await peticion;
       try { await preparar(); }
       catch (e) {
+        if (e.message === 'caducado') throw e;
         // los identificadores guardados pueden ser de archivos borrados: se buscan de nuevo
         recordar('ids:' + (st.usuario?.email || ''), undefined); st.ids = {};
         await preparar();
       }
       await descargarYUnir();
       recordar('conectado', true);
+      try { sessionStorage.removeItem(SS.intento); } catch (e) {}
       fijarEstado('ok', 'Guardado en Google Drive');
     } catch (e) {
       console.error(e);
       if (e.message !== 'caducado') fijarEstado('error', 'No se pudo conectar: ' + e.message);
     }
+  }
+
+  async function conectar() {
+    if (!disponible()) { fijarEstado('error', configurado() ? 'No se pudo cargar el inicio de sesión de Google.' : 'Falta configurar la conexión con Google.'); return; }
+    fijarEstado('conectando', 'Conectando con Google Drive…');
+    const peticion = pedirToken([SCOPE_DRIVE]); // dentro del clic
+    try { await peticion; }
+    catch (e) { fijarEstado('error', 'No se pudo conectar: ' + e.message); return; }
+    await completarConexion();
   }
 
   async function reconectar() {
@@ -213,6 +273,7 @@ const Google = (() => {
     if (st.token && window.google?.accounts?.oauth2) google.accounts.oauth2.revoke(st.token, () => {});
     st.token = null; st.usuario = null; st.ids = {}; st.scopes.clear();
     recordar('conectado', undefined);
+    try { sessionStorage.removeItem('certificados.g.token'); } catch (e) {}
     fijarEstado('desconectado');
   }
 
@@ -289,7 +350,7 @@ const Google = (() => {
     estado: () => ({ ...st, configurado: configurado(), disponible: disponible(), recordado: !!recuerdo('conectado') }),
     suscribir: f => { alCambiar = f; },
     usarProveedor: p => { proveedor = p; },
-    conectar, reconectar, desconectar, cambiado, refrescar, renovarSiHaceFalta,
+    conectar, reconectar, desconectar, autoconectar, cambiado, refrescar, renovarSiHaceFalta,
     prepararGmail, enviarCorreo,
     urlCarpeta: () => st.ids.carpeta ? `https://drive.google.com/drive/folders/${st.ids.carpeta}` : null,
     urlHoja: () => st.ids.hoja ? `https://docs.google.com/spreadsheets/d/${st.ids.hoja}` : null,

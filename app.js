@@ -226,7 +226,7 @@ const IC = {
 function chipDrive() {
   const g = Google.estado();
   if (!g.configurado) return `<span class="chip" title="Falta el ID de cliente de Google en config.js">☁ Drive sin configurar</span>`;
-  if (!g.disponible) return `<span class="chip" title="El inicio de sesión de Google no carga en esta página">☁ Drive no disponible aquí</span>`;
+  if (!g.disponible && !g.usuario && g.estado !== 'conectando') return `<span class="chip" title="El inicio de sesión de Google no carga en esta página">☁ Drive no disponible aquí</span>`;
   if (g.estado === 'desconectado') return `<button class="chip accion" data-google="conectar">☁ Conectar con Google Drive</button>`;
   if (g.estado === 'conectando') return `<span class="chip">☁ Conectando…</span>`;
   if (g.estado === 'caducado') return `<button class="chip aviso" data-google="reconectar" title="${esc(g.mensaje)}">☁ Reconectar Drive</button>`;
@@ -251,6 +251,16 @@ function menuDrive() {
     </div></div>`;
   m.addEventListener('click', e => { if (e.target === m || e.target.closest('[data-cerrar]') || e.target.closest('[data-google]')) m.remove(); });
   document.body.appendChild(m);
+}
+
+/* ---------------- CABECERA CON EL NOMBRE Y LOGO DE LA PARROQUIA ---------------- */
+function cabecera(titulo, derecha = '', portada = false) {
+  const c = estado.config;
+  const logo = c.logo ? `<span class="logo"><img src="${c.logo}" alt=""></span>` : '';
+  return `<header class="barra ${portada ? 'portada' : ''}">
+    <div class="marca">${logo}<div class="marca-txt"><div class="parroquia">${esc(c.nombre || '')}</div><h1>${titulo}</h1></div></div>
+    <div class="cab-der"><span data-chip>${chipDrive()}</span>${derecha}</div>
+  </header>`;
 }
 
 /* ---------------- RENDER GENERAL ---------------- */
@@ -279,7 +289,7 @@ function vistaMenu() {
   const total = estado.registros.filter(tieneDatos).length;
   const bloques = personasRegistro(r);
   return `
-  <header class="barra"><h1>Certificados</h1><span data-chip>${chipDrive()}</span><button class="btn-cab" data-ir="parroquia">⚙ Datos de la parroquia</button></header>
+  ${cabecera('Certificados', '<button class="btn-cab" data-ir="parroquia">⚙ Datos de la parroquia</button>', true)}
   <main>
     <div class="menu-top">
       <div class="tarjeta ${sinFirma() ? 'pide-firma' : ''}">
@@ -333,7 +343,7 @@ function vistaFormulario() {
     : '<p class="nota" style="grid-column:1/-1">Esta pantalla todavía no está hecha. Cuando me pases la captura y un PDF de ejemplo, la monto.</p>';
 
   return `
-  <header class="barra"><h1>${esc(cert.titulo)}</h1><span data-chip>${chipDrive()}</span></header>
+  ${cabecera(esc(cert.titulo))}
   <main>
     <div class="form-layout">
       <div class="tarjeta">
@@ -463,7 +473,7 @@ function vistaParroquia() {
   const inp = (k, label, w = 12, ph = '') => `<div class="campo" style="grid-column:span ${w}"><label for="cfg_${k}">${label}</label><input type="text" id="cfg_${k}" data-cfg="${k}" value="${esc(c[k])}" placeholder="${esc(ph)}"></div>`;
   const img = (k, label, ayuda) => `<div class="campo"><label>${label}</label><div class="imgbox"><div class="vista">${c[k] ? `<img src="${c[k]}" alt="">` : 'sin imagen'}</div><div class="imgbox-txt">${selectorArchivo(`data-img="${k}"`)}<div class="nota">${ayuda}</div>${c[k] ? `<button class="btn" data-quitar="${k}">Quitar</button>` : ''}</div></div></div>`;
   return `
-  <header class="barra"><h1>Datos de la parroquia</h1><span data-chip>${chipDrive()}</span><button class="btn-cab" data-ir="menu">← Volver al menú</button></header>
+  ${cabecera('Datos de la parroquia', '<button class="btn-cab" data-ir="menu">← Volver al menú</button>')}
   <main>
     <div class="config">
       <div class="tarjeta"><h3>Membrete</h3><div class="rejilla">
@@ -500,7 +510,7 @@ function vistaFirmantes() {
       </div>
     </div>`).join('');
   return `
-  <header class="barra"><h1>Firmantes</h1><span data-chip>${chipDrive()}</span><button class="btn-cab" data-ir="menu">← Volver al menú</button></header>
+  ${cabecera('Firmantes', '<button class="btn-cab" data-ir="menu">← Volver al menú</button>')}
   <main>
     <div class="una-columna">${firmas}
       <button class="btn prim" id="anadirFirma">+ Añadir firmante</button>
@@ -623,6 +633,8 @@ window.addEventListener('focus', () => Google.refrescar());
   if (window.claude && typeof window.claude.use === 'function') {
     window.claude.use('downloads').then(d => { estado.descargas = d; }).catch(() => {});
   }
+  // Si este navegador ya se conectó a Google Drive, se conecta solo
+  Google.autoconectar().catch(e => console.error(e));
   // El script de Google carga aparte: cuando llega, se repinta el indicador
   const espera = setInterval(() => { if (Google.estado().disponible) { clearInterval(espera); pintarChip(); } }, 300);
   setTimeout(() => clearInterval(espera), 15000);

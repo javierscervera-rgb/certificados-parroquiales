@@ -26,13 +26,25 @@
   input, select, textarea { font: inherit; color: inherit; }
 
   header.barra {
-    background: var(--cabecera); color: #e9e4d8; padding: 18px 28px;
-    display: flex; align-items: center; gap: 16px; min-height: 84px;
+    background: var(--cabecera); color: #e9e4d8; padding: 14px 28px;
+    display: flex; align-items: center; gap: 16px; min-height: 84px; flex-wrap: wrap;
   }
   header.barra h1 {
     font-family: 'EB Garamond', Georgia, serif; font-weight: 500; letter-spacing: .06em;
-    text-transform: uppercase; font-size: clamp(20px, 2.6vw, 32px); margin: 0; flex: 1; line-height: 1.15;
+    text-transform: uppercase; font-size: clamp(20px, 2.6vw, 32px); margin: 0; line-height: 1.15;
   }
+  .marca { display: flex; align-items: center; gap: 14px; flex: 1 1 320px; min-width: 0; }
+  .marca .logo { flex: none; width: 46px; height: 46px; border-radius: 10px; background: #fff; display: grid; place-items: center; overflow: hidden; padding: 3px; }
+  .marca .logo img { max-width: 100%; max-height: 100%; }
+  .marca-txt { min-width: 0; }
+  .marca .parroquia { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #b9b3a5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cab-der { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+  /* Portada: nombre y logo de la parroquia en grande */
+  header.portada { padding: 22px 28px; min-height: 120px; }
+  header.portada .marca { gap: 20px; }
+  header.portada .logo { width: 84px; height: 84px; border-radius: 14px; padding: 5px; }
+  header.portada .parroquia { font-family: 'EB Garamond', Georgia, serif; font-size: clamp(24px, 3.4vw, 40px); letter-spacing: .02em; text-transform: none; color: #f3ecdc; white-space: normal; line-height: 1.1; }
+  header.portada h1 { font-family: Inter, system-ui, sans-serif; font-size: 13px; letter-spacing: .22em; color: var(--oro); font-weight: 600; margin-top: 6px; }
   .btn-cab { background: transparent; border: 1px solid #555a66; color: #e9e4d8; border-radius: 8px; padding: 8px 14px; }
   .btn-cab:hover { background: #343844; }
 
@@ -43,9 +55,27 @@
   .tarjeta { background: var(--papel); border: 1px solid var(--borde); border-radius: 12px; padding: 14px 16px; }
   .tarjeta h3 { margin: 0 0 10px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--suave); font-weight: 600; }
   .fila { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .fila select { flex: 1; min-width: 180px; }
+  .fila select { flex: 1 1 180px; width: auto; }
+  .fila > .btn { height: 40px; }
+  /* Cajas de texto, fechas y desplegables: mismo alto y ancho en todos los navegadores (también Safari/iPhone) */
   select, input[type=text], input[type=email], input[type=date], input[type=time], input[type=number], textarea {
-    border: 1px solid var(--borde); background: #fff; border-radius: 7px; padding: 8px 10px; width: 100%;
+    border: 1px solid var(--borde); background-color: #fff; border-radius: 7px; padding: 0 10px; width: 100%;
+    min-width: 0; max-width: 100%; height: 40px; line-height: 38px; font-size: 15px; color: var(--tinta);
+    -webkit-appearance: none; appearance: none; box-sizing: border-box; margin: 0; display: block;
+  }
+  textarea { height: auto; line-height: 1.45; padding: 8px 10px; resize: vertical; }
+  select {
+    padding-right: 32px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%235d6475' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 11px center; background-size: 12px 8px;
+  }
+  input[type=date], input[type=time] { position: relative; overflow: hidden; padding-right: 8px; }
+  input[type=date]::-webkit-date-and-time-value, input[type=time]::-webkit-date-and-time-value { text-align: left; margin: 0; }
+  input[type=date]::-webkit-datetime-edit, input[type=time]::-webkit-datetime-edit { padding: 0; min-width: 0; overflow: hidden; }
+  input[type=date]::-webkit-calendar-picker-indicator, input[type=time]::-webkit-calendar-picker-indicator { margin: 0 0 0 4px; padding: 0; opacity: .6; cursor: pointer; }
+  input[type=color] { -webkit-appearance: none; appearance: none; border: 1px solid var(--borde); border-radius: 7px; background: #fff; }
+  @supports (-webkit-touch-callout: none) { /* iPhone/iPad: evita el zoom al tocar un campo */
+    select, input, textarea { font-size: 16px; }
   }
   input:focus, select:focus, textarea:focus { outline: 2px solid var(--azul-2); outline-offset: -1px; border-color: transparent; }
   .btn { background: #fff; border: 1px solid var(--borde); border-radius: 8px; padding: 8px 14px; white-space: nowrap; }
@@ -86,7 +116,7 @@
   .campos { display: grid; grid-template-columns: 1fr; gap: 10px; }
   .campo label { display: block; font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--suave); margin-bottom: 4px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sexo { display: flex; gap: 6px; }
-  .sexo button { flex: 1; border: 1px solid var(--borde); background: #fff; border-radius: 7px; padding: 8px 4px; min-width: 0; }
+  .sexo button { flex: 1; border: 1px solid var(--borde); background: #fff; border-radius: 7px; padding: 0 4px; height: 40px; min-width: 0; color: var(--tinta); }
   .sexo button.on { background: var(--azul); color: #fff; border-color: var(--azul); }
   hr.sep { border: 0; border-top: 1px solid var(--borde); margin: 6px 0; }
 
@@ -176,7 +206,10 @@
     .grupo { grid-template-columns: 1fr; }
     .botonera { grid-template-columns: 1fr 1fr; }
     .botonera .peligro { grid-column: 1 / -1; }
-    header.barra { flex-wrap: wrap; }
+    header.barra, header.portada { padding: 14px 16px; }
+    header.portada .logo { width: 60px; height: 60px; }
+    .cab-der { justify-content: flex-start; }
+    .chip { max-width: 100%; }
     .grupo > div:first-child { display: flex; align-items: center; gap: 12px; }
     .grupo .etq { margin: 0; }
     .icono { width: 56px; height: 56px; }
