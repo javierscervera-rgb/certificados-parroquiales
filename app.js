@@ -50,7 +50,7 @@ const estado = {
   certId: null,
   descargas: null,
   firma: null,      // índice del firmante elegido; al abrir la aplicación no hay ninguno
-  pestanaExp: 'datos', parteExp: 'portada', volverA: null,
+  pestanaExp: 'datos', parteExp: 'portada', volverA: null, abiertos: {},
 };
 // Migración desde la primera versión (un único registro)
 if (!Array.isArray(estado.registros)) {
@@ -407,14 +407,30 @@ const PESTANAS_EXP = [
   { id: 'ultima', nombre: 'Última página', parte: 'ultima' },
 ];
 
+// Bloques del examen: empiezan plegados; al jurar se abre el primero y al marcar «Resuelto» se pasa al siguiente
+function bloquesAbiertos(pref) {
+  const clave = `${estado.actualId}:${pref}`;
+  if (!estado.abiertos[clave]) {
+    const d = estado.registro, n = pref.startsWith('t') ? EXPEDIENTE.testigo.length : EXPEDIENTE.contrayente('novio').length;
+    const set = new Set();
+    if (d[pref + 'juramento']) for (let i = 1; i <= n; i++) if (d[`${pref}res_${i}`] !== '1') { set.add(i); break; }
+    estado.abiertos[clave] = set;
+  }
+  return estado.abiertos[clave];
+}
+function aplicarBloques(pref) {
+  const set = bloquesAbiertos(pref);
+  document.querySelectorAll(`details.seccion-exp[data-pref="${pref}"]`).forEach(det => { det.open = set.has(+det.dataset.i); });
+}
+
 function seccionesHTML(secciones, pref) {
-  const d = estado.registro;
+  const d = estado.registro, abiertos = bloquesAbiertos(pref);
   return secciones.map((sec, i) => {
     const resuelto = d[`${pref}res_${i + 1}`] === '1';
     const preguntas = sec.preguntas.map(q => campoHTML({ ...q, k: pref + q.k, w: q.w || 12, ph: q.ph })).join('');
-    return `<details class="seccion-exp" style="--color:${sec.color}" ${resuelto ? '' : 'open'}>
+    return `<details class="seccion-exp" data-pref="${pref}" data-i="${i + 1}" style="--color:${sec.color}" ${abiertos.has(i + 1) ? 'open' : ''}>
       <summary><span>${i + 1}. ${esc(sec.seccion)}</span>
-        <label class="resuelto" title="Marca la sección como resuelta y se pliega"><input type="checkbox" data-resuelto="${pref}res_${i + 1}" ${resuelto ? 'checked' : ''}> Resuelto</label></summary>
+        <label class="resuelto" title="Marca la sección como resuelta: se pliega y se abre la siguiente"><input type="checkbox" data-resuelto="${pref}res_${i + 1}" ${resuelto ? 'checked' : ''}> Resuelto</label></summary>
       <div class="rejilla">${preguntas}</div>
     </details>`;
   }).join('');
@@ -892,13 +908,36 @@ document.addEventListener('input', e => {
   else if (el.dataset.f !== undefined && el.dataset.fk) { estado.config.firmas[+el.dataset.f][el.dataset.fk] = el.value; guardarConfig(); }
 });
 
+document.addEventListener('toggle', e => {
+  const det = e.target;
+  if (!det.classList || !det.classList.contains('seccion-exp')) return;
+  const set = bloquesAbiertos(det.dataset.pref), i = +det.dataset.i;
+  if (det.open) set.add(i); else set.delete(i);
+}, true);
+
 document.addEventListener('change', async e => {
   const el = e.target;
+  if (/(_ex_|^t[12]_)juramento$/.test(el.dataset.k || '')) {
+    const pref = el.dataset.k.replace(/juramento$/, ''), set = bloquesAbiertos(pref);
+    set.clear();
+    if (el.value) {
+      const primero = [...document.querySelectorAll(`details.seccion-exp[data-pref="${pref}"]`)].find(x => !x.querySelector('[data-resuelto]').checked);
+      if (primero) set.add(+primero.dataset.i);
+    }
+    setTimeout(() => aplicarBloques(pref));
+  }
   if (el.id === 'selFirma') { estado.firma = +el.value; if (estado.vista === 'menu') render(); else actualizarPrevia(); }
   else if (el.id === 'parteExp') { estado.parteExp = el.value; actualizarPrevia(); }
   else if (el.dataset.resuelto) {
     estado.registro[el.dataset.resuelto] = el.checked ? '1' : ''; guardarRegistro();
-    const det = el.closest('details'); if (det) det.open = !el.checked;
+    const det = el.closest('details'), pref = det.dataset.pref, i = +det.dataset.i, set = bloquesAbiertos(pref);
+    if (el.checked) {
+      set.delete(i);
+      const todos = [...document.querySelectorAll(`details.seccion-exp[data-pref="${pref}"]`)];
+      const sig = todos.find(x => +x.dataset.i > i && !x.querySelector('[data-resuelto]').checked);
+      if (sig) { set.add(+sig.dataset.i); aplicarBloques(pref); sig.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+      else aplicarBloques(pref);
+    } else { set.add(i); aplicarBloques(pref); }
   }
   else if (el.dataset.img || el.dataset.firma !== undefined) {
     const f = el.files && el.files[0]; if (!f) return;
