@@ -85,11 +85,57 @@ function confirmar(msg, si = 'Sí', no = 'Cancelar') {
   });
 }
 
+/* Cuando un mismo dato ha cambiado aquí y en Google Drive, se pregunta cuál se queda */
+function fechaHora(iso) {
+  const d = new Date(iso);
+  return iso && !isNaN(d) ? d.toLocaleString('es-ES', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'fecha desconocida';
+}
+function elegirConflictos(lista) {
+  return new Promise(res => {
+    const elegido = {};
+    const m = document.createElement('div');
+    m.className = 'modal conflictos';
+    m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true');
+    const fila = c => `<li data-id="${esc(c.id)}">
+        <div class="cf-titulo">${esc(c.titulo)}${c.tipo === 'config' ? '' : '<span>Registro</span>'}</div>
+        <div class="cf-opciones">
+          <button type="button" class="cf-op" data-elige="aqui"><strong>Este ordenador</strong><span>Modificado: ${esc(fechaHora(c.aqui))}</span></button>
+          <button type="button" class="cf-op" data-elige="drive"><strong>Google Drive</strong><span>Modificado: ${esc(fechaHora(c.drive))}</span></button>
+        </div>
+      </li>`;
+    m.innerHTML = `<div class="caja">
+      <h3>Datos distintos aquí y en Google Drive</h3>
+      <p>${lista.length === 1 ? 'Este dato se ha cambiado' : 'Estos datos se han cambiado'} en este ordenador y también en Google Drive (desde otro ordenador) desde la última vez que se sincronizaron. Elige qué versión se queda en cada caso; la otra se descartará.</p>
+      <ul class="cf-lista">${lista.map(fila).join('')}</ul>
+      ${lista.length > 1 ? `<div class="fila cf-todos"><button type="button" class="btn" data-todos="aqui">Todo de este ordenador</button><button type="button" class="btn" data-todos="drive">Todo de Google Drive</button></div>` : ''}
+      <div class="fila" style="justify-content:flex-end"><button type="button" class="btn prim" data-aceptar disabled>Aceptar</button></div>
+    </div>`;
+    const pintar = () => {
+      m.querySelectorAll('.cf-lista li').forEach(li => li.querySelectorAll('.cf-op').forEach(b => b.classList.toggle('on', elegido[li.dataset.id] === b.dataset.elige)));
+      m.querySelector('[data-aceptar]').disabled = lista.some(c => !elegido[c.id]);
+    };
+    m.addEventListener('click', e => {
+      const op = e.target.closest('.cf-op'), todos = e.target.closest('[data-todos]');
+      if (op) { elegido[op.closest('li').dataset.id] = op.dataset.elige; pintar(); }
+      else if (todos) { lista.forEach(c => { elegido[c.id] = todos.dataset.todos; }); pintar(); }
+      else if (e.target.closest('[data-aceptar]') && !lista.some(c => !elegido[c.id])) { m.remove(); res(elegido); }
+    });
+    document.body.appendChild(m);
+  });
+}
+
 /* ---------------- GUARDAR ---------------- */
 const NO_CUENTAN = /^(sexo|sexo_manual|motivo_bendicion|conyuge|documentos|diligencia|feligres)$|_res_\d+$/;
 const tieneDatos = r => Object.entries(r.datos).some(([k, v]) => !NO_CUENTAN.test(k) && v && String(v).trim());
 const registrosGuardables = () => estado.registros.filter(r => tieneDatos(r) || r.id === estado.actualId);
+// Huella de los datos de la parroquia y firmantes (sin tareas ni eliminados): si cambia, se apunta la fecha
+function huellaConfig(c) { const { tareas, eliminados, modificado, ...resto } = c || {}; return JSON.stringify(resto); }
+let _huellaConfig = null;
 function guardarConfig() {
+  const h = huellaConfig(estado.config);
+  if (_huellaConfig === null) _huellaConfig = huellaConfig(Almacen.leer('config', {}));
+  if (h !== _huellaConfig) estado.config.modificado = ahora();
+  _huellaConfig = h;
   if (!Almacen.guardar('config', estado.config)) aviso('No se pudo guardar en este navegador (imágenes demasiado grandes).');
   Google.cambiado('config');
 }
@@ -105,6 +151,10 @@ const sinFirma = () => estado.firma == null || !estado.config.firmas[estado.firm
 // Lo que ve Google: datos para subir y cómo aplicar lo que baja
 Google.usarProveedor({
   obtenerDatos: () => ({ config: estado.config, registros: estado.registros.filter(tieneDatos) }),
+  tituloRegistro: r => tituloRegistro(r),
+  // Un ordenador que nunca ha tocado los datos de la parroquia no compite con los de Drive
+  configSinTocar: c => !c.modificado && huellaConfig(c) === huellaConfig(Object.assign(structuredClone(CONFIG_DEFECTO), { eliminados: c.eliminados, tareas: c.tareas })),
+  resolverConflictos: lista => elegirConflictos(lista),
   aplicarDatos: (config, registros) => {
     // los registros eliminados en cualquier ordenador no vuelven
     const eliminados = [...new Set([...(estado.config.eliminados || []), ...(config.eliminados || [])])];
@@ -112,6 +162,7 @@ Google.usarProveedor({
     const firmaTareas = l => JSON.stringify((l || []).map(t => t.id + t.actualizado).sort());
     const faltabanEnDrive = eliminados.length > (config.eliminados || []).length || firmaTareas(tareas) !== firmaTareas(config.tareas);
     estado.config = Object.assign(structuredClone(CONFIG_DEFECTO), config, { eliminados, tareas });
+    _huellaConfig = huellaConfig(estado.config);
     registros = registros.filter(r => !eliminados.includes(r.id));
     const vacio = actual() && !tieneDatos(actual()) ? actual() : null;
     estado.registros = registros.length ? registros : [nuevoRegistro()];
@@ -119,7 +170,7 @@ Google.usarProveedor({
     if (!estado.registros.find(r => r.id === estado.actualId)) estado.actualId = estado.registros[estado.registros.length - 1].id;
     Almacen.guardar('config', estado.config);
     Almacen.guardar('registros', registrosGuardables());
-    const escribiendo = document.activeElement?.dataset?.k || document.activeElement?.dataset?.tarea || document.activeElement?.id === 'tareaNueva';
+    const escribiendo = document.activeElement?.dataset?.k || document.activeElement?.dataset?.tarea || ['tareaNueva', 'callejeroQ', 'callejeroMun'].includes(document.activeElement?.id);
     // En «Datos de la parroquia» y «Firmantes» no se redibuja: si se acaba de elegir una imagen
     // (sello, logo, firma) el campo de archivo tiene que seguir siendo el mismo para recibirla.
     const editandoConfig = estado.vista === 'parroquia' || estado.vista === 'firmantes';
@@ -286,7 +337,7 @@ function render() {
   else if (estado.vista === 'firmantes') app.innerHTML = vistaFirmantes();
   else app.innerHTML = vistaFormulario();
   if (estado.vista === 'form') actualizarPrevia();
-  if (estado.vista === 'menu') ajustarTareas();
+  if (estado.vista === 'menu') { ajustarTareas(); if (typeof Callejero !== 'undefined') Callejero.montar(); }
   if (estado.vista !== 'menu') setTimeout(irAlPrimerVacio, 0);
 }
 function irA(vista) { estado.vista = vista; render(); window.scrollTo(0, 0); }
@@ -333,9 +384,30 @@ function vistaMenu() {
       <div class="tarjeta">${grupos}
         <div class="leyenda"><span>Modelo listo</span><span class="p">Falta el modelo (PDF de ejemplo)</span></div>
       </div>
-      ${tareasHTML()}
+      <div class="columna-derecha">
+        ${callejeroHTML()}
+        ${tareasHTML()}
+      </div>
     </div>
   </main>`;
+}
+
+/* ---------------- BUSCADOR DE PARROQUIAS (callejero.js) ---------------- */
+function callejeroHTML() {
+  return `<section class="tarjeta callejero">
+    <h3>Buscar parroquia</h3>
+    <p class="nota">Escribe la dirección (calle, número y, si lo sabes, municipio) y te digo a qué parroquia pertenece.</p>
+    <div class="cj-busca">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+      <input id="callejeroQ" type="search" autocomplete="off" spellcheck="false" placeholder="P. ej. Alcalá 120" aria-label="Dirección" role="combobox" aria-autocomplete="list" aria-controls="callejeroSug" aria-expanded="false">
+      <button id="callejeroX" type="button" aria-label="Borrar" hidden>✕</button>
+      <ul id="callejeroSug" role="listbox" hidden></ul>
+    </div>
+    <select id="callejeroMun" aria-label="Municipio"><option value="">Todos los municipios</option></select>
+    <div id="callejeroEstado" class="nota" aria-live="polite"></div>
+    <div id="callejeroOut"></div>
+    <p class="nota cj-pie">Callejero parroquial de la Archidiócesis de Madrid. Ante cualquier duda, confirmar con la parroquia o la vicaría.</p>
+  </section>`;
 }
 
 /* ---------------- TAREAS PENDIENTES (compartidas por la parroquia vía Drive) ---------------- */
@@ -924,7 +996,7 @@ window.addEventListener('wheel', e => {
    detenerse en el día, mes y año de las fechas. Varón/Mujer es una sola parada. */
 function camposNavegables() {
   return [...document.querySelectorAll('main .tarjeta input:not([type=file]):not([type=color]):not([type=checkbox]), main .tarjeta select, main .tarjeta textarea, main .tarjeta .sexo button.on')]
-    .filter(el => !el.disabled && el.offsetParent !== null && !el.closest('.tareas'));
+    .filter(el => !el.disabled && el.offsetParent !== null && !el.closest('.tareas, .callejero'));
 }
 function enfocar(el) {
   if (!el) return;

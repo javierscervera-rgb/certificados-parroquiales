@@ -71,7 +71,7 @@
   .fila select { flex: 1 1 180px; width: auto; }
   .fila > .btn { height: 40px; }
   /* Cajas de texto, fechas y desplegables: mismo alto y ancho en todos los navegadores (también Safari/iPhone) */
-  select, input[type=text], input[type=tel], input[type=email], input[type=date], input[type=time], input[type=number], textarea {
+  select, input[type=text], input[type=search], input[type=tel], input[type=email], input[type=date], input[type=time], input[type=number], textarea {
     border: 1px solid var(--borde); background-color: #fff; border-radius: 7px; padding: 0 10px; width: 100%;
     min-width: 0; max-width: 100%; height: 40px; line-height: 38px; font-size: 15px; color: var(--tinta);
     -webkit-appearance: none; appearance: none; box-sizing: border-box; margin: 0; display: block;
@@ -143,7 +143,47 @@
   .miniatura .n-paginas { position: absolute; left: 16px; bottom: 16px; background: rgba(29,34,48,.85); color: #fff; font-size: 11px; padding: 4px 8px; border-radius: 999px; }
   /* Menú: certificados y, a la derecha, tareas pendientes */
   .menu-cuerpo { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; align-items: start; }
-  .tareas { position: sticky; top: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .columna-derecha { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+  .tareas { display: flex; flex-direction: column; gap: 10px; }
+  /* Buscador de parroquias */
+  .callejero { display: flex; flex-direction: column; gap: 8px; }
+  .callejero h3 { margin: 0; }
+  .callejero > .nota { margin: 0; }
+  .cj-busca { position: relative; }
+  .cj-busca svg { position: absolute; left: 11px; top: 50%; width: 17px; height: 17px; transform: translateY(-50%); fill: none; stroke: var(--suave); stroke-width: 2; pointer-events: none; }
+  .cj-busca input { width: 100%; padding-left: 34px !important; padding-right: 30px !important; }
+  .cj-busca input::-webkit-search-cancel-button { display: none; }
+  #callejeroX { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border: 0; background: none; color: var(--suave); font-size: 14px; padding: 4px 6px; cursor: pointer; }
+  #callejeroSug { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 30; list-style: none; margin: 0; padding: 4px; background: #fff; border: 1px solid var(--azul); border-radius: 10px; box-shadow: 0 12px 30px rgba(0,0,0,.18); max-height: 50vh; overflow: auto; }
+  #callejeroSug li { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; padding: 7px 9px; border-radius: 7px; cursor: pointer; font-size: 14px; }
+  #callejeroSug li:hover, #callejeroSug li.on { background: #eceae4; }
+  #callejeroSug li .sl b { color: var(--azul); }
+  #callejeroSug li .ss { color: var(--suave); font-size: 11px; white-space: nowrap; }
+  #callejeroOut { max-height: 62vh; overflow-y: auto; }
+  #callejeroOut:empty, #callejeroEstado:empty { display: none; }
+  .callejero .hint { background: #f6efe2; border: 1px solid #e3d4b5; border-radius: 9px; padding: 8px 10px; margin: 8px 0; font-size: 13px; line-height: 1.4; }
+  .callejero .card { background: #fff; border: 1px solid var(--borde); border-radius: 11px; padding: 10px 11px; margin: 8px 0; }
+  .callejero .card.best { border-color: var(--azul); }
+  .callejero .st { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 7px; }
+  .callejero .st h3 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--tinta); }
+  .callejero .st .num { color: var(--azul); }
+  .callejero .muni { font-size: 11px; color: var(--suave); border: 1px solid var(--borde); border-radius: 999px; padding: 0 8px; }
+  .callejero .tag { font-size: 11px; color: #fff; background: var(--azul); border-radius: 999px; padding: 0 8px; font-weight: 600; }
+  .callejero .tag.soft { background: #eceae4; color: var(--suave); }
+  .callejero .par { border-left: 3px solid var(--azul); padding: 4px 0 4px 10px; margin: 8px 0; }
+  .callejero .par.alt { border-left-color: var(--borde); }
+  .callejero .pn { font-family: 'EB Garamond', Georgia, serif; font-size: 19px; line-height: 1.2; color: var(--tinta); }
+  .callejero .par.alt .pn { font-size: 17px; }
+  .callejero .pn small { font-family: inherit; font-size: 12px; color: var(--suave); margin-left: 5px; }
+  .callejero .pd { font-size: 12.5px; color: var(--suave); line-height: 1.45; }
+  .callejero .pd a { color: var(--azul); white-space: nowrap; }
+  .callejero .tr { font-size: 12px; margin-top: 2px; }
+  .callejero details.tramos { margin-top: 6px; }
+  .callejero details.tramos summary { cursor: pointer; color: var(--suave); font-size: 12px; }
+  .callejero table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 4px; }
+  .callejero th, .callejero td { text-align: left; padding: 3px 4px; border-bottom: 1px solid var(--borde); vertical-align: top; }
+  .callejero tr.hit td { background: #e8edf8; font-weight: 600; }
+  .cj-pie { font-size: 11px !important; }
   .tareas h3 { margin: 0; }
   .tarea-nueva { display: flex; gap: 6px; }
   .tarea-nueva input { flex: 1; min-width: 0; }
@@ -270,6 +310,18 @@
   .modal { position: fixed; inset: 0; background: rgba(20,22,28,.45); display: grid; place-items: center; padding: 20px; }
   .modal .caja { background: var(--papel); border-radius: 14px; padding: 22px; max-width: 420px; width: 100%; }
   .modal .caja p { margin: 0 0 16px; line-height: 1.5; }
+  .modal.conflictos { z-index: 100; }
+  .modal.conflictos .caja { max-width: 620px; max-height: 88vh; overflow-y: auto; }
+  .modal.conflictos h3 { margin: 0 0 8px; font-family: 'EB Garamond', Georgia, serif; font-size: 24px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--tinta); }
+  .cf-lista { list-style: none; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+  .cf-titulo { font-weight: 700; margin-bottom: 6px; display: flex; align-items: baseline; gap: 8px; }
+  .cf-titulo span { font-weight: 500; font-size: 11px; color: var(--suave); text-transform: uppercase; letter-spacing: .06em; }
+  .cf-opciones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .cf-op { text-align: left; border: 1.5px solid var(--borde); background: #fff; border-radius: 10px; padding: 9px 11px; display: flex; flex-direction: column; gap: 2px; cursor: pointer; font: inherit; color: var(--tinta); }
+  .cf-op span { font-size: 12px; color: var(--suave); }
+  .cf-op.on { border-color: var(--azul); background: #e8edf8; box-shadow: 0 0 0 1px var(--azul) inset; }
+  .cf-todos { margin-bottom: 12px; flex-wrap: wrap; }
+  @media (max-width: 520px) { .cf-opciones { grid-template-columns: 1fr; } }
 
   @media (max-width: 900px) {
     .rejilla .campo { grid-column: span 6 !important; }
@@ -337,6 +389,7 @@
 <script src="sexo.js"></script>
 <script src="motor.js"></script>
 <script src="google.js"></script>
+<script src="callejero.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

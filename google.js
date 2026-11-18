@@ -202,6 +202,23 @@ const Google = (() => {
   }
 
   /* ---------- Unir datos locales y de Drive ---------- */
+  // Huella de la configuración sin las listas que se unen solas (tareas, eliminados) ni la fecha
+  function huella(c) {
+    if (!c) return '';
+    const { tareas, eliminados, modificado, ...resto } = c;
+    const t = JSON.stringify(resto);
+    let h = 5381; for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) | 0;
+    return t.length + ':' + (h >>> 0).toString(36);
+  }
+  // «Base»: cómo estaban los datos la última vez que este ordenador y Drive coincidían.
+  // Sirve para saber quién ha cambiado algo desde entonces: si han cambiado los dos, se pregunta.
+  const claveBase = () => 'base:' + (st.usuario ? st.usuario.email : '');
+  function guardarBase(datos) {
+    const reg = {}; datos.registros.forEach(r => { reg[r.id] = r.actualizado || ''; });
+    recordar(claveBase(), { registros: reg, config: huella(datos.config) });
+  }
+  const mismosDatos = (a, b) => JSON.stringify(a.datos || {}) === JSON.stringify(b.datos || {});
+
   function unirRegistros(locales, remotos) {
     const m = new Map();
     [...remotos, ...locales].forEach(r => {
@@ -231,29 +248,70 @@ const Google = (() => {
     const inicio = st.cambios || 0;
     const local = proveedor.obtenerDatos();
     const remotos = await leerRegistros();
-    let registros = unirRegistros(local.registros, remotos);
-    let config = local.config;
+    const base = recuerdo(claveBase()) || { registros: {}, config: null };
+    const conflictos = [];
+    const decididos = new Map();   // id → registro que se queda (cuando solo cambió un lado)
+
+    // Registros que existen en los dos sitios y no coinciden
+    const mapaRemotos = new Map(remotos.map(r => [r.id, r]));
+    local.registros.forEach(r => {
+      const rem = mapaRemotos.get(r.id);
+      if (!rem || mismosDatos(r, rem)) return;
+      const b = base.registros[r.id];
+      const cambioAqui = b === undefined || (r.actualizado || '') !== b;
+      const cambioDrive = b === undefined || (rem.actualizado || '') !== b;
+      if (cambioAqui && cambioDrive) conflictos.push({ tipo: 'registro', id: r.id, titulo: proveedor.tituloRegistro(r), aqui: r.actualizado, drive: rem.actualizado, _l: r, _r: rem });
+      else decididos.set(r.id, cambioAqui ? r : rem);
+    });
+
+    // Configuración (membrete, firmantes, sello…)
+    let config = local.config, remota = null, configLocalGana = false;
     if (st.ids.config) {
-      const remota = await leerJSON(st.ids.config);
-      if (remota && remota.nombre !== undefined) config = remota;
-      // Si mientras se descargaba se cambió algo aquí (p. ej. se cargó el sello al volver del
-      // selector de archivos), manda lo de aquí: no se pisa con la copia de Drive, que es anterior.
-      if ((st.cambios || 0) !== inicio || st.pendiente.config) {
-        const ahora = proveedor.obtenerDatos();
-        config = { ...ahora.config, tareas: (remota && remota.tareas) || [] };
-        registros = unirRegistros(ahora.registros, remotos);
-        st.pendiente.config = true;
+      remota = await leerJSON(st.ids.config);
+      if (remota && remota.nombre !== undefined) {
+        config = remota;
+        const hl = huella(local.config), hr = huella(remota);
+        if ((st.cambios || 0) !== inicio || st.pendiente.config) configLocalGana = true;   // se cambió algo mientras se descargaba
+        else if (hl !== hr && !proveedor.configSinTocar(local.config)) {
+          if (base.config && hl === base.config) configLocalGana = false;                 // solo cambió Drive
+          else if (base.config && hr === base.config) configLocalGana = true;             // solo cambió este ordenador
+          else conflictos.push({ tipo: 'config', id: 'config', titulo: 'Datos de la parroquia y firmantes', aqui: local.config.modificado, drive: remota.modificado });
+        }
       }
     } else {
       st.ids.config = await crearJSON(CONFIG, st.ids.carpeta, local.config);
       recordar('ids:' + st.usuario.email, st.ids);
     }
+
+    // Si hay que elegir, se pregunta antes de tocar nada
+    if (conflictos.length) {
+      st.resolviendo = true;
+      fijarEstado('conectando', 'Hay datos distintos aquí y en Google Drive: elige cuáles se quedan');
+      let elecciones;
+      try { elecciones = await proveedor.resolverConflictos(conflictos.map(({ _l, _r, ...c }) => c)); }
+      finally { st.resolviendo = false; }
+      conflictos.forEach(c => {
+        const queda = elecciones[c.id] === 'aqui' ? 'aqui' : 'drive';
+        if (c.tipo === 'config') configLocalGana = queda === 'aqui';
+        else {
+          // el elegido se marca como cambiado ahora, para que se suba y gane en los demás ordenadores
+          const r = queda === 'aqui' ? { ...c._l, actualizado: new Date().toISOString() } : c._r;
+          decididos.set(c.id, r);
+        }
+      });
+    }
+
+    const ahoraLocal = proveedor.obtenerDatos();
+    if (configLocalGana) { config = { ...ahoraLocal.config, tareas: (remota && remota.tareas) || [] }; st.pendiente.config = true; }
+    let registros = unirRegistros(ahoraLocal.registros, remotos).map(r => decididos.get(r.id) || r);
+
     const final = proveedor.aplicarDatos(config, registros);
-    // si había cambios locales que Drive no tenía (registros nuevos o eliminados), se suben
+    // si había cambios locales que Drive no tenía (registros nuevos, elegidos o eliminados), se suben
     const lista = final.registros;
     if (final.configPendiente) st.pendiente.config = true;
     if (lista.length !== remotos.length || lista.some(r => !remotos.find(x => x.id === r.id && x.actualizado === r.actualizado))) st.pendiente.registros = true;
     if (st.pendiente.config || st.pendiente.registros) await subir();
+    else guardarBase(proveedor.obtenerDatos());
   }
 
   async function completarConexion() {
@@ -308,13 +366,14 @@ const Google = (() => {
     st.temporizador = setTimeout(subir, 2000);
   }
   async function subir() {
-    if (!st.usuario || !tokenVivo()) return;
+    if (!st.usuario || !tokenVivo() || st.resolviendo) return;
     if (!st.pendiente.config && !st.pendiente.registros) return;
     fijarEstado('guardando', 'Guardando en Google Drive…');
     const datos = proveedor.obtenerDatos();
     try {
       if (st.pendiente.config) { st.pendiente.config = false; await escribirJSON(st.ids.config, datos.config); }
       if (st.pendiente.registros) { st.pendiente.registros = false; await escribirRegistros(datos.registros); }
+      if (!st.pendiente.config && !st.pendiente.registros) guardarBase(datos);
       fijarEstado('ok', 'Guardado en Google Drive');
     } catch (e) {
       console.error(e);
@@ -326,7 +385,7 @@ const Google = (() => {
 
   // Al volver a la pestaña, trae lo que hayan cambiado desde otro ordenador
   async function refrescar() {
-    if (!st.usuario || !tokenVivo() || st.pendiente.config || st.pendiente.registros || st.estado === 'guardando') return;
+    if (!st.usuario || !tokenVivo() || st.resolviendo || st.pendiente.config || st.pendiente.registros || st.estado === 'guardando') return;
     try { await descargarYUnir(); fijarEstado('ok', 'Guardado en Google Drive'); } catch (e) { console.error(e); }
   }
 
