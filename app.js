@@ -428,7 +428,10 @@ async function crearPDF(conFirma) {
      encabezados ni pies de página del navegador, sin hojas de más).
    - Safari (Mac, iPhone, iPad): se imprimen las hojas del certificado como página, ocultando
      la aplicación, porque Safari no imprime bien un PDF incrustado. */
-const esSafari = /^((?!chrome|chromium|android|crios|fxios|edg).)*safari/i.test(navigator.userAgent) || /iP(hone|ad|od)/.test(navigator.userAgent);
+const _ua = navigator.userAgent;
+// iPhone/iPad (el iPad moderno se presenta como Mac, pero tiene pantalla táctil): todos sus navegadores son Safari por dentro
+const esIOS = /iP(hone|ad|od)/.test(_ua) || (/Macintosh/.test(_ua) && navigator.maxTouchPoints > 1);
+const esSafari = esIOS || /^((?!chrome|chromium|android|crios|fxios|edg).)*safari/i.test(_ua);
 
 async function imprimir(conFirma) {
   const cert = CERTIFICADOS.find(c => c.id === estado.certId);
@@ -462,8 +465,11 @@ async function imprimirHojas(paginas, titulo) {
   document.body.appendChild(zona);
   const tituloAntes = document.title;
   document.title = titulo;
-  const limpiar = () => { zona.remove(); document.title = tituloAntes; window.removeEventListener('afterprint', limpiar); };
-  window.addEventListener('afterprint', limpiar);
+  // Las hojas NO se quitan al terminar: en iPad/iPhone el aviso de «impresión terminada» llega
+  // al abrir la ventana de impresión, y al elegir impresora se vuelve a preparar el documento.
+  // En pantalla están ocultas; se sustituyen al imprimir otro certificado.
+  const restaurar = () => { setTimeout(() => { document.title = tituloAntes; }, 1500); window.removeEventListener('afterprint', restaurar); };
+  window.addEventListener('afterprint', restaurar);
   await Promise.all([...zona.querySelectorAll('image')].map(im => new Promise(r => { const i = new Image(); i.onload = i.onerror = r; i.src = im.getAttribute('href'); })));
   await new Promise(r => setTimeout(r, 50));
   window.print();
