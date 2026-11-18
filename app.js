@@ -71,9 +71,9 @@ function hoyISO() {
 const $ = (sel, raiz = document) => raiz.querySelector(sel);
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 const sinAcentos = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-function aviso(msg) {
+function aviso(msg, ms = 3600) {
   const t = $('#toast'); t.textContent = msg; t.classList.add('on');
-  clearTimeout(aviso._t); aviso._t = setTimeout(() => t.classList.remove('on'), 3600);
+  clearTimeout(aviso._t); aviso._t = setTimeout(() => t.classList.remove('on'), ms);
 }
 function confirmar(msg, si = 'Sí', no = 'Cancelar') {
   return new Promise(res => {
@@ -655,6 +655,7 @@ async function imprimirHojas(paginas, titulo) {
   document.getElementById('zonaImpresion')?.remove();
   const zona = document.createElement('div');
   zona.id = 'zonaImpresion';
+  if (!esIOS) zona.className = 'con-margenes';
   zona.innerHTML = paginas.map(p => `<div class="hoja-impresion">${Motor.aSVG(p)}</div>`).join('');
   document.body.appendChild(zona);
   const tituloAntes = document.title;
@@ -666,6 +667,10 @@ async function imprimirHojas(paginas, titulo) {
   window.addEventListener('afterprint', restaurar);
   await Promise.all([...zona.querySelectorAll('image')].map(im => new Promise(r => { const i = new Image(); i.onload = i.onerror = r; i.src = im.getAttribute('href'); })));
   await new Promise(r => setTimeout(r, 50));
+  if (!esIOS && !Almacen.leer('avisoPieSafari', false)) {
+    Almacen.guardar('avisoPieSafari', true);
+    aviso('Si sale la dirección web abajo: en la ventana de imprimir, pulsa «Mostrar detalles» y desmarca «Imprimir encabezados y pies de página». Safari lo recuerda.', 12000);
+  }
   window.print();
 }
 
