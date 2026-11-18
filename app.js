@@ -265,7 +265,7 @@ function cabecera(titulo, derecha = '', portada = false) {
   const logo = c.logo ? `<span class="logo"><img src="${c.logo}" alt=""></span>` : '';
   return `<header class="barra ${portada ? 'portada' : ''}">
     <div class="marca"><button class="marca-inicio" data-ir="menu" title="Volver a la pantalla de inicio">${logo}<span class="parroquia">${esc(c.nombre || '')}</span></button><h1>${titulo}</h1></div>
-    <div class="cab-der"><span data-chip>${chipDrive()}</span>${derecha}</div>
+    <div class="cab-der"><div class="tamano" role="group" aria-label="Tamaño de letra"><button class="menos" data-tam="-1" title="Letra más pequeña" aria-label="Letra más pequeña">A</button><button class="mas" data-tam="1" title="Letra más grande" aria-label="Letra más grande">A</button></div><span data-chip>${chipDrive()}</span>${derecha}</div>
   </header>`;
 }
 
@@ -277,6 +277,7 @@ function render() {
   else if (estado.vista === 'firmantes') app.innerHTML = vistaFirmantes();
   else app.innerHTML = vistaFormulario();
   if (estado.vista === 'form') actualizarPrevia();
+  if (estado.vista !== 'menu') setTimeout(irAlPrimerVacio, 0);
 }
 function irA(vista) { estado.vista = vista; render(); window.scrollTo(0, 0); }
 
@@ -595,11 +596,82 @@ function leerImagen(file) {
   });
 }
 
+/* ---------------- TAMAÑO DE LETRA ----------------
+   Sustituye al zoom del navegador: A− / A+ en la cabecera, y también
+   Cmd/Ctrl + y Cmd/Ctrl − y la rueda del ratón con Cmd/Ctrl. */
+const ESCALAS = [0.85, 0.92, 1, 1.1, 1.2, 1.32, 1.45, 1.6];
+let escala = Almacen.leer('escala', 1);
+function aplicarEscala() { document.body.style.zoom = escala === 1 ? '' : String(escala); }
+function cambiarEscala(paso) {
+  let i = ESCALAS.findIndex(x => Math.abs(x - escala) < 0.01); if (i < 0) i = 2;
+  const j = paso === 0 ? 2 : Math.max(0, Math.min(ESCALAS.length - 1, i + paso));
+  if (ESCALAS[j] === escala) { aviso(paso > 0 ? 'Es el tamaño más grande.' : 'Es el tamaño más pequeño.'); return; }
+  escala = ESCALAS[j]; Almacen.guardar('escala', escala); aplicarEscala();
+}
+aplicarEscala();
+document.addEventListener('keydown', e => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+  if (e.key === '+' || e.key === '=') { e.preventDefault(); cambiarEscala(1); }
+  else if (e.key === '-' || e.key === '_') { e.preventDefault(); cambiarEscala(-1); }
+  else if (e.key === '0') { e.preventDefault(); cambiarEscala(0); }
+});
+let _rueda = 0;
+window.addEventListener('wheel', e => {
+  if (!e.ctrlKey) return; // en Mac, el gesto de pellizcar en el trackpad también llega así
+  e.preventDefault();
+  _rueda += e.deltaY;
+  if (Math.abs(_rueda) > 60) { cambiarEscala(_rueda < 0 ? 1 : -1); _rueda = 0; }
+}, { passive: false });
+['gesturestart', 'gesturechange'].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false })); // pellizco en iPhone/iPad
+
+/* ---------------- TABULADOR ----------------
+   En cada pantalla el cursor empieza en el primer campo vacío y el tabulador
+   salta de campo en campo (de izquierda a derecha y de arriba abajo), sin
+   detenerse en el día, mes y año de las fechas. Varón/Mujer es una sola parada. */
+function camposNavegables() {
+  return [...document.querySelectorAll('main .tarjeta input:not([type=file]):not([type=color]):not([type=checkbox]), main .tarjeta select, main .tarjeta textarea, main .tarjeta .sexo button.on')]
+    .filter(el => !el.disabled && el.offsetParent !== null);
+}
+function enfocar(el) {
+  if (!el) return;
+  el.focus({ preventScroll: false });
+  if (el.select && /^(text|email|number|)$/.test(el.type || '') && el.tagName !== 'SELECT') { try { el.select(); } catch (e) {} }
+  el.scrollIntoView({ block: 'nearest' });
+}
+function irAlPrimerVacio() {
+  if (!window.matchMedia('(pointer: fine)').matches) return; // en móvil no se abre el teclado solo
+  if (document.querySelector('.modal')) return;
+  const vacio = camposNavegables().find(el =>
+    el.id !== 'selFirma' && el.id !== 'fechaDoc' && el.tagName !== 'SELECT' && el.tagName !== 'BUTTON' && !String(el.value || '').trim());
+  enfocar(vacio);
+}
+document.addEventListener('keydown', e => {
+  // Varón/Mujer con el teclado: espacio, Intro o flechas cambian la elección
+  const bs = e.target.closest && e.target.closest('.sexo button');
+  if (bs && [' ', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+    e.preventDefault();
+    const otro = [...bs.parentElement.querySelectorAll('button')].find(b => b !== bs);
+    otro.click(); otro.focus();
+    return;
+  }
+  if (e.key !== 'Tab' || e.ctrlKey || e.altKey || e.metaKey) return;
+  const lista = camposNavegables();
+  const i = lista.indexOf(document.activeElement);
+  if (i < 0) return; // fuera de los campos: comportamiento normal
+  const j = i + (e.shiftKey ? -1 : 1);
+  if (j >= 0 && j < lista.length) { e.preventDefault(); enfocar(lista[j]); return; }
+  if (j >= lista.length) {
+    const siguiente = document.querySelector('[data-imprimir="1"]:not(:disabled)');
+    if (siguiente) { e.preventDefault(); siguiente.focus(); }
+  }
+});
+
 /* ---------------- EVENTOS ---------------- */
 document.addEventListener('click', async e => {
   Google.renovarSiHaceFalta();
   const t = e.target.closest('button'); if (!t) return;
-  if (t.dataset.ir) irA(t.dataset.ir);
+  if (t.dataset.tam) cambiarEscala(+t.dataset.tam);
+  else if (t.dataset.ir) irA(t.dataset.ir);
   else if (t.id === 'previa') abrirAmpliada();
   else if ((t.dataset.abrir || t.dataset.registro) && sinFirma()) aviso('Primero elige quién firma.');
   else if (t.dataset.abrir) { estado.certId = t.dataset.abrir; irA('form'); }
