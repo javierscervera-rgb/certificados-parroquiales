@@ -921,7 +921,50 @@ async function imprimir(conFirma) {
   const res = await Motor.maquetar(cert, estado.registro, ctx(), conFirma);
   const nombre = cert.nombre + (tituloRegistro(actual()) !== '(registro vacío)' ? ' - ' + tituloRegistro(actual()) : '');
   if (!esSafari) return imprimirPDF(await Motor.aPDF(res, nombre));
-  return imprimirHojas(Motor.paginas(res), nombre);
+  return imprimirSafari(conFirma, () => imprimirHojas(Motor.paginas(res), nombre));
+}
+
+/* Safari (iPhone, iPad y Mac): se imprime el PDF del certificado, no la página.
+   Así sale exacto: sin márgenes añadidos, sin cortes y sin la dirección web al pie.
+   El PDF se prepara primero y luego un botón (un toque nuevo, que Safari exige) lo abre:
+   - iPhone/iPad: hoja de compartir con el PDF → «Imprimir».
+   - Mac: el PDF en una pestaña nueva → ⌘P. */
+async function imprimirSafari(conFirma, metodoAnterior) {
+  const { bytes, nombre } = await crearPDF(conFirma);
+  const archivo = new File([bytes], nombre, { type: 'application/pdf' });
+  const compartir = esIOS && navigator.canShare && navigator.canShare({ files: [archivo] });
+  const m = document.createElement('div');
+  m.className = 'modal';
+  m.innerHTML = `<div class="caja imprimir-safari">
+      <h3>Listo para imprimir</h3>
+      <p>${compartir
+        ? 'Pulsa <strong>Imprimir</strong> y, en el menú que se abre, elige <strong>Imprimir</strong>.'
+        : esIOS ? 'Pulsa <strong>Abrir el PDF</strong>; después toca el botón de compartir y elige <strong>Imprimir</strong>.'
+        : 'Pulsa <strong>Abrir para imprimir</strong>: el certificado se abre en una pestaña nueva. Allí pulsa <strong>⌘P</strong> (o Archivo › Imprimir).'}</p>
+      <button type="button" class="btn prim grande" data-is="principal">${IC.imprimir}${compartir ? 'Imprimir' : esIOS ? 'Abrir el PDF' : 'Abrir para imprimir'}</button>
+      <div class="fila" style="justify-content:space-between;margin-top:14px">
+        <button type="button" class="btn enlace" data-is="anterior">Imprimir desde la página (método anterior)</button>
+        <button type="button" class="btn" data-is="cerrar">Cerrar</button>
+      </div>
+    </div>`;
+  const cerrar = () => m.remove();
+  m.addEventListener('click', async e => {
+    const b = e.target.closest('[data-is]'); if (!b) { if (e.target === m) cerrar(); return; }
+    if (b.dataset.is === 'cerrar') return cerrar();
+    if (b.dataset.is === 'anterior') { cerrar(); return metodoAnterior(); }
+    if (compartir) {
+      try { await navigator.share({ files: [archivo], title: nombre }); cerrar(); }
+      catch (err) { if (err && err.name !== 'AbortError') aviso('No se pudo abrir el menú de compartir.'); }
+      return;
+    }
+    const url = URL.createObjectURL(archivo);
+    const w = window.open(url, '_blank');
+    if (!w) location.href = url;          // si se bloquea la pestaña nueva, se abre aquí
+    setTimeout(() => URL.revokeObjectURL(url), 10 * 60000);
+    cerrar();
+  });
+  document.body.appendChild(m);
+  m.querySelector('[data-is="principal"]').focus();
 }
 
 function imprimirPDF(bytes) {
