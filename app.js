@@ -388,7 +388,6 @@ function vistaMenu() {
     <nav class="saltos" aria-label="Ir al sacramento">${GRUPOS.map(g => `<button type="button" data-saltar="grupo-${g.id}"><span class="icono">${ICONOS[g.id]}</span>${g.nombre}</button>`).join('')}</nav>
     <div class="menu-cuerpo">
       <div class="tarjeta">${grupos}
-        <div class="leyenda"><span>Modelo listo</span><span class="p">Falta el modelo (PDF de ejemplo)</span></div>
       </div>
       <div class="columna-derecha">
         ${callejeroHTML()}
