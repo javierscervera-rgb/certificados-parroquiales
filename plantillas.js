@@ -568,6 +568,19 @@ const CERTIFICADOS = [
 
   /* ---------------- CONFIRMACIÓN ---------------- */
   {
+    id: 'catequesis_confirmacion', grupo: 'confirmacion', estado: 'listo',
+    nombre: 'Certificado de catequesis de confirmación',
+    titulo: 'Certificado de haber cursado catequesis de confirmación aquí',
+    campos: [C.nombre, C.apellidos, { k: 'anios_cateq_conf', label: 'Años de catequesis', tipo: 'number', w: 3 }],
+    documento: (d) => ({
+      titulo: 'CERTIFICADO HABER CURSADO\nCATEQUESIS DE CONFIRMACIÓN EN LA PARROQUIA',
+      bloques: [
+        { p: `Certifico que ${H.nombre(d)} ha asistido a la catequesis preparatoria para el sacramento de la confirmación durante ${H.anios(d.anios_cateq_conf)}.` }
+      ],
+      cierre: CIERRE_CERTIFICO
+    })
+  },
+  {
     id: 'confirmacion', grupo: 'confirmacion', estado: 'listo',
     nombre: 'Certificado de confirmación', titulo: 'Certificado de confirmación',
     campos: [C.nombre, C.apellidos, C.sexo, C.f_nac, C.f_conf,
