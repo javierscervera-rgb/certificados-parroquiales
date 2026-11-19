@@ -23,6 +23,8 @@
     --cabecera: #120F0D; --cab-tinta: #F0E8DC; --cab-suave: #AA9D8F; --cab-borde: #3A322D; --cab-hover: #292420;
     --icono-fondo: #2A2521; --cert-fondo: #2A2521; --miniatura: #2A2521; --grupo-fondo: rgba(255, 255, 255, .025);
     --mezcla: 13%; --ok-tinta: #A9D3B4; --aviso-tinta: #F0C890;
+    --boton: #2F2924; --boton-hover: #3A322C;
+    --boton-sombra: inset 0 1px 0 rgba(255, 255, 255, .05), 0 2px 6px rgba(0, 0, 0, .35);
     color-scheme: dark;
   }
   html[data-tema="claro"] {
@@ -36,6 +38,8 @@
     --cabecera: #EFE6DA; --cab-tinta: #2A241D; --cab-suave: #7A6E60; --cab-borde: #DDD2C3; --cab-hover: #E6DBCB;
     --icono-fondo: #2A2521; --cert-fondo: #FFFBF5; --miniatura: #E6DBCB; --grupo-fondo: rgba(255, 255, 255, .45);
     --mezcla: 100%; --ok-tinta: #2F6B45; --aviso-tinta: #8A5A16;
+    --boton: #F3EADF; --boton-hover: #EBDFD0;
+    --boton-sombra: inset 0 1px 0 rgba(255, 255, 255, .8), 0 1px 3px rgba(42, 36, 29, .16);
     color-scheme: light;
   }
   * { box-sizing: border-box; }
@@ -73,10 +77,12 @@
   header.portada { padding: 22px 28px; min-height: 120px; }
   header.portada .marca { flex-direction: column; gap: 6px; }
   header.portada .marca-inicio { gap: 20px; }
-  header.portada .marca-inicio:has(.logo) + h1 { padding-left: 104px; margin-top: -26px; }
+  /* «Certificados» debajo del logo (o del nombre, si no hay logo), en el color del membrete */
+  header.portada .marca-inicio:has(.logo) + h1 { width: 84px; display: flex; justify-content: center; white-space: nowrap; padding: 0; margin-top: 6px; font-size: 10.5px; letter-spacing: .14em; }
   header.portada .logo { width: 84px; height: 84px; border-radius: 14px; padding: 5px; }
   header.portada .parroquia { font-family: var(--serif); font-weight: 700; font-size: clamp(24px, 3.4vw, 40px); letter-spacing: 0; text-transform: none; color: var(--titulo); white-space: normal; line-height: 1.1; }
-  header.portada h1 { font-family: var(--sans); font-size: 13px; letter-spacing: .22em; color: var(--cab-suave); font-weight: 600; margin-top: 6px; }
+  header.portada h1 { font-family: var(--sans); font-size: 13px; letter-spacing: .22em; color: color-mix(in srgb, var(--membrete, #a8322d) 72%, #fff); font-weight: 700; margin-top: 6px; }
+  html[data-tema="claro"] header.portada h1 { color: var(--membrete, #a8322d); }
   .btn-cab { background: transparent; border: 1px solid var(--cab-borde); color: var(--cab-tinta); border-radius: 8px; padding: 8px 14px; }
   .btn-cab:hover { background: var(--cab-hover); }
 
@@ -94,6 +100,25 @@
   .h-logo { width: 24px; height: 24px; background: currentColor; -webkit-mask: url(herramientas.svg) center / contain no-repeat; mask: url(herramientas.svg) center / contain no-repeat; }
 
   main { padding: 22px 28px 40px; max-width: 1400px; margin: 0 auto; }
+
+  /* Botones con algo de relieve (día y noche) */
+  .cert:not(.pend), .btn:not(.prim):not(.enlace), .acc:not(.prim), .saltos button, .otros-docs .btn {
+    background: var(--boton); box-shadow: var(--boton-sombra);
+  }
+  .cert:not(.pend):not(:disabled):hover, .btn:not(.prim):not(.enlace):not(:disabled):hover, .acc:not(.prim):not(:disabled):hover, .saltos button:hover {
+    background: var(--boton-hover); border-color: var(--azul) !important;
+  }
+  .cert:not(.pend):not(:disabled):hover { color: var(--azul); transform: translateY(-1px); }
+  .cert { transition: background .15s, transform .15s, color .15s; }
+  .btn.prim, .acc.prim { box-shadow: 0 2px 8px rgba(0, 0, 0, .25); }
+
+  /* Iconos de los sacramentos: en modo día, círculo claro y dibujo en terracota */
+  html[data-tema="claro"] .icono { background: #F4E6D6; box-shadow: inset 0 0 0 2px var(--azul), 0 1px 3px rgba(42, 36, 29, .15); }
+  html[data-tema="claro"] .icono svg [fill="#f3ead2"], html[data-tema="claro"] .icono svg [fill="#efe2c4"],
+  html[data-tema="claro"] .icono svg [fill="#fbf6e8"], html[data-tema="claro"] .icono svg [fill="#d9c7a0"] { fill: #C9735A; }
+  html[data-tema="claro"] .icono svg [fill="#c9a65a"] { fill: #9A6E22; }
+  html[data-tema="claro"] .icono svg [stroke="#c9a65a"], html[data-tema="claro"] .icono svg [stroke="#e0b84e"] { stroke: #9A6E22; }
+  html[data-tema="claro"] .icono svg [stroke="#7a4f12"] { stroke: #FFFBF5; }
 
   /* ---------- MENÚ ---------- */
   .menu-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; margin-bottom: 26px; }
@@ -420,7 +445,7 @@
     .lateral > .miniatura { grid-column: 1 / -1; grid-row: auto; max-width: 240px; justify-self: center; }
     header.barra, header.portada { padding: 14px 16px; }
     header.portada .logo { width: 60px; height: 60px; }
-    header.portada .marca-inicio:has(.logo) + h1 { padding-left: 0; margin-top: 4px; }
+    header.portada .marca-inicio:has(.logo) + h1 { width: 60px; margin-top: 4px; font-size: 9px; letter-spacing: .08em; }
     .cab-der { justify-content: flex-start; }
     .chip { max-width: 100%; }
     .grupo > div:first-child { display: flex; align-items: center; gap: 12px; }
