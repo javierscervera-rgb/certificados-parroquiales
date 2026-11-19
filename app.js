@@ -225,7 +225,7 @@ function personasRegistro(r) {
   const persona = j(d.nombre, d.apellidos);
   if (persona) bloques.push({ lineas: [persona], etiqueta: 'Nombre y apellidos' });
   const novio = j(d.novio_nombre, d.novio_apellidos), novia = j(d.novia_nombre, d.novia_apellidos);
-  if (novio || novia) bloques.push({ lineas: [novio || '—', novia || '—'], etiqueta: 'Novio y novia (matrimonio)' });
+  if (novio || novia) bloques.push({ lineas: [novio || '—', novia || '—'], etiqueta: 'Novio y novia' });
   return bloques;
 }
 function moverRegistro(paso) {
@@ -355,7 +355,7 @@ function vistaMenu() {
   const grupos = GRUPOS.map(g => {
     const botones = CERTIFICADOS.filter(c => c.grupo === g.id).map(c =>
       `<button class="cert ${c.estado === 'pendiente' ? 'pend' : ''}" data-abrir="${c.id}" ${bloq}>${c.estado === 'pendiente' ? '<span class="pill">pendiente</span>' : ''}${esc(c.nombre)}</button>`).join('');
-    return `<div class="grupo"><div><div class="icono">${ICONOS[g.id]}</div><div class="etq">${g.nombre}</div></div><div class="botones">${botones}</div></div>`;
+    return `<div class="grupo" id="grupo-${g.id}"><div><div class="icono">${ICONOS[g.id]}</div><div class="etq">${g.nombre}</div></div><div class="botones">${botones}</div></div>`;
   }).join('');
   const r = actual(), { i, n } = posicion();
   const total = estado.registros.filter(tieneDatos).length;
@@ -384,6 +384,7 @@ function vistaMenu() {
         </div>
       </div>
     </div>
+    <nav class="saltos" aria-label="Ir al sacramento">${GRUPOS.map(g => `<button type="button" data-saltar="grupo-${g.id}"><span class="icono">${ICONOS[g.id]}</span>${g.nombre}</button>`).join('')}</nav>
     <div class="menu-cuerpo">
       <div class="tarjeta">${grupos}
         <div class="leyenda"><span>Modelo listo</span><span class="p">Falta el modelo (PDF de ejemplo)</span></div>
@@ -537,6 +538,10 @@ function campoHTML(c) {
   return `${c.sep ? '<hr class="sep">' : ''}<div class="campo${cuenta ? ' con-contador' : ''}" style="${estilo}"><label for="${id}">${esc(c.label)}</label>${ctl}${cuenta}</div>`;
 }
 
+// En el móvil, «Menú principal» y «Nuevo registro» van arriba, bajo la cabecera
+function accionesArriba(nuevo = true) {
+  return `<div class="acciones-arriba"><button class="acc" data-ir="menu">${IC.menu}Menú principal</button>${nuevo ? `<button class="acc" data-registro="nuevo">${IC.nuevo}Nuevo registro</button>` : ''}</div>`;
+}
 function vistaFormulario() {
   const cert = CERTIFICADOS.find(c => c.id === estado.certId);
   if (cert.formato === 'expediente') return vistaExpediente(cert);
@@ -564,6 +569,7 @@ function vistaFormulario() {
   return `
   ${cabecera(esc(cert.titulo))}
   <main>
+    ${accionesArriba(true)}
     <div class="form-layout">
       <div class="tarjeta">
         <div class="rejilla">
@@ -665,6 +671,7 @@ function vistaAmonestaciones(cert) {
   return `
   ${cabecera(esc(cert.titulo))}
   <main>
+    ${accionesArriba(false)}
     <div class="form-layout">
       <div class="tarjeta">
         <div class="rejilla">
@@ -834,6 +841,7 @@ function vistaExpediente(cert) {
   return `
   ${cabecera(esc(cert.titulo))}
   <main>
+    ${accionesArriba(true)}
     <div class="form-layout">
       <div class="tarjeta">
         <div class="pestanas" role="tablist">${PESTANAS_EXP.map(p => `<button role="tab" class="${p.id === pest ? 'on' : ''}" data-pestana="${p.id}">${p.nombre}</button>`).join('')}</div>
@@ -1196,6 +1204,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.dispensa !== undefined) { estado.registro.dispensa = AMON.dispensa(estado.registro) ? '' : '1'; if (!estado.registro.dispensa) estado.registro.diligencia = ''; guardarRegistro(); render(); return; }
   if (t.dataset.tareaBorrar) { if (await confirmar('¿Eliminar esta tarea?', 'Eliminar')) { cambiarTarea(t.dataset.tareaBorrar, { borrada: true }); pintarTareas(); } return; }
   if (t.dataset.tareasLimpiar !== undefined) { (estado.config.tareas || []).filter(x => x.hecha && !x.borrada).forEach(x => Object.assign(x, { borrada: true, actualizado: ahora() })); guardarConfig(); pintarTareas(); return; }
+  if (t.dataset.saltar) { document.getElementById(t.dataset.saltar)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
   if (t.dataset.tam) cambiarEscala(+t.dataset.tam);
   else if (t.dataset.ir) irA(t.dataset.ir);
   else if (t.id === 'previa') abrirAmpliada();

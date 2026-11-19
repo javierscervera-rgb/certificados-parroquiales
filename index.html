@@ -104,6 +104,8 @@
   .icono svg { width: 44px; height: 44px; }
   .grupo .etq { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--suave); margin-top: 6px; text-align: center; }
   .botones { display: flex; flex-wrap: wrap; gap: 8px; }
+  /* Solo en el móvil: menú para saltar a cada sacramento y botones arriba en los formularios */
+  .saltos, .acciones-arriba { display: none; }
   .cert {
     width: 132px; min-height: 88px; border: 0; border-radius: 12px; padding: 10px;
     background: linear-gradient(180deg, var(--azul-2), #10172e); color: #e8d6a8;
@@ -368,6 +370,19 @@
     .grupo { grid-template-columns: 1fr; }
     .botonera { grid-template-columns: 1fr 1fr; }
     .botonera .peligro { grid-column: 1 / -1; }
+    /* certificados en dos columnas a todo el ancho */
+    .botones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .botones .cert { width: auto; min-height: 76px; }
+    .grupo { scroll-margin-top: 12px; }
+    .saltos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: -8px 0 18px; }
+    .saltos button { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; border: 1px solid var(--borde); background: var(--papel); border-radius: 12px; padding: 10px 2px 8px; font-size: 8.5px; font-weight: 700; letter-spacing: 0; text-transform: uppercase; color: var(--suave); cursor: pointer; white-space: nowrap; }
+    .saltos .icono { width: 44px; height: 44px; margin: 0; }
+    .saltos .icono svg { width: 30px; height: 30px; }
+    .acciones-arriba { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+    .acciones-arriba .acc:only-child { grid-column: 1 / -1; }
+    .lateral > [data-ir="menu"], .lateral > [data-registro="nuevo"] { display: none; }
+    .lateral > [data-correo] { grid-column: 1 / -1; }
+    .lateral > .miniatura { grid-column: 1 / -1; grid-row: auto; max-width: 240px; justify-self: center; }
     header.barra, header.portada { padding: 14px 16px; }
     header.portada .logo { width: 60px; height: 60px; }
     header.portada .marca-inicio:has(.logo) + h1 { padding-left: 0; margin-top: 4px; }
