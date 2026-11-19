@@ -329,7 +329,8 @@ function cabecera(titulo, derecha = '', portada = false) {
   const logo = c.logo ? `<span class="logo"><img src="${c.logo}" alt=""></span>` : '';
   return `<header class="barra ${portada ? 'portada' : ''}">
     <div class="marca"><button class="marca-inicio" data-ir="menu" title="Volver a la pantalla de inicio">${logo}<span class="parroquia">${esc(c.nombre || '')}</span></button><h1>${titulo}</h1></div>
-    <div class="cab-der"><div class="tamano" role="group" aria-label="Tamaño de letra"><button class="menos" data-tam="-1" title="Letra más pequeña" aria-label="Letra más pequeña">A</button><button class="mas" data-tam="1" title="Letra más grande" aria-label="Letra más grande">A</button></div><span data-chip>${chipDrive()}</span>${derecha}</div>
+    <div class="cab-der"><div class="tamano" role="group" aria-label="Tamaño de letra"><button class="menos" data-tam="-1" title="Letra más pequeña" aria-label="Letra más pequeña">A</button><button class="mas" data-tam="1" title="Letra más grande" aria-label="Letra más grande">A</button></div><button class="modo" type="button" data-modo title="Modo día / noche (igual que en Herramientas)" aria-label="Cambiar entre modo día y modo noche"><svg class="luna" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><svg class="sol" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button><span data-chip>${chipDrive()}</span>${derecha}</div>
+    ${portada ? `<a class="enlace-h" href="https://herramientasacerdotal.es/" title="HerramientaSacerdotal" aria-label="Ir a HerramientaSacerdotal"><span class="h-logo" aria-hidden="true"></span></a>` : ''}
   </header>`;
 }
 
@@ -1247,6 +1248,7 @@ document.addEventListener('click', async e => {
   if (t.dataset.dispensa !== undefined) { estado.registro.dispensa = AMON.dispensa(estado.registro) ? '' : '1'; if (!estado.registro.dispensa) estado.registro.diligencia = ''; guardarRegistro(); render(); return; }
   if (t.dataset.tareaBorrar) { if (await confirmar('¿Eliminar esta tarea?', 'Eliminar')) { cambiarTarea(t.dataset.tareaBorrar, { borrada: true }); pintarTareas(); } return; }
   if (t.dataset.tareasLimpiar !== undefined) { (estado.config.tareas || []).filter(x => x.hecha && !x.borrada).forEach(x => Object.assign(x, { borrada: true, actualizado: ahora() })); guardarConfig(); pintarTareas(); return; }
+  if (t.hasAttribute('data-modo')) { HSTema.cambiar(); return; }
   if (t.dataset.saltar) { document.getElementById(t.dataset.saltar)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
   if (t.dataset.tam) cambiarEscala(+t.dataset.tam);
   else if (t.dataset.ir) irA(t.dataset.ir);
