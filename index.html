@@ -289,9 +289,11 @@
     animation: ayuda-flota 3.2s ease-in-out infinite; transition: opacity .2s;
   }
   .ayuda-boton svg { width: 24px; height: 24px; pointer-events: none; }
-  .ayuda-boton:hover { background: var(--azul); color: var(--sobre-acento); }
+  .ayuda-boton.pulsado { background: var(--azul); color: var(--sobre-acento); transform: scale(.92); transition: background .1s, color .1s, transform .1s; }
+  .ayuda-boton.moviendo { animation: none; }
+  .ayuda-boton.recuperando { transition: transform .5s cubic-bezier(.34, 1.8, .5, 1); }
   .ayuda-boton:focus-visible { outline: 2px solid var(--azul); outline-offset: 3px; }
-  .ayuda-boton.arrastrando { animation: none; cursor: grabbing; transform: scale(1.08); box-shadow: 0 8px 22px rgba(0, 0, 0, .35); }
+  .ayuda-boton.arrastrando { animation: none; cursor: grabbing; box-shadow: 0 10px 26px rgba(0, 0, 0, .38); }
   .ayuda-boton.escondido { opacity: .7; animation: none; }
   .ayuda-boton.oculto-por-panel { opacity: 0; pointer-events: none; }
   @keyframes ayuda-flota { 0%, 100% { transform: translate(0, 0) rotate(0); } 30% { transform: translate(-2px, -4px) rotate(-4deg); } 65% { transform: translate(1px, 3px) rotate(3deg); } }

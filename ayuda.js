@@ -141,32 +141,81 @@ const Ayuda = (() => {
     boton.title = 'Ayuda y dudas (puedes arrastrarlo)';
     boton.innerHTML = ICONO;
     document.body.appendChild(boton);
-    let ini = null, movido = false;
+    let ini = null, movido = false, muestras = [], animando = 0;
+    const ahoraMs = () => performance.now();
+    // Estira el botón en la dirección del movimiento y lo aplasta en la otra (más cuanto más rápido)
+    const deformar = (vx, vy) => {
+      const v = Math.hypot(vx, vy);
+      if (v < 0.02) { boton.style.transform = ''; return; }
+      const k = Math.min(0.28, v * 0.09), ang = Math.atan2(vy, vx) * 180 / Math.PI;
+      boton.style.transform = `rotate(${ang}deg) scale(${1 + k}, ${1 - k * 0.75}) rotate(${-ang}deg)`;
+    };
+    // Al pararse vuelve a su forma con un pequeño rebote elástico
+    const recuperar = () => {
+      boton.classList.add('recuperando');
+      boton.style.transform = '';
+      setTimeout(() => boton.classList.remove('recuperando', 'moviendo'), 520);
+    };
+    const guardar = () => {
+      try { localStorage.setItem(CLAVE, JSON.stringify({ modo: movil() ? 'm' : 'd', fx: boton.offsetLeft / window.innerWidth, fy: boton.offsetTop / window.innerHeight })); } catch (err) {}
+    };
+    // Inercia: sigue deslizándose y frena poco a poco; rebota suave en los bordes
+    const deslizar = (vx, vy) => {
+      cancelAnimationFrame(animando);
+      let x = boton.offsetLeft, y = boton.offsetTop, t0 = ahoraMs();
+      const paso = () => {
+        const t = ahoraMs(), dt = Math.min(40, t - t0); t0 = t;
+        const roce = Math.pow(0.0035, dt / 1000);   // pierde ~99,6 % de velocidad por segundo
+        vx *= roce; vy *= roce;
+        let nx = x + vx * dt, ny = y + vy * dt;
+        const q = encajar(nx, ny);
+        if (q.x !== nx) vx = -vx * 0.45;
+        if (q.y !== ny) vy = -vy * 0.45;
+        x = q.x; y = q.y;
+        colocar({ x, y }); deformar(vx, vy);
+        if (Math.hypot(vx, vy) > 0.02) animando = requestAnimationFrame(paso);
+        else { animando = 0; recuperar(); guardar(); }
+      };
+      animando = requestAnimationFrame(paso);
+    };
     boton.addEventListener('pointerdown', e => {
       if (e.button !== undefined && e.button !== 0) return;
+      cancelAnimationFrame(animando); animando = 0;
       ini = { px: e.clientX, py: e.clientY, x: boton.offsetLeft, y: boton.offsetTop };
-      movido = false;
+      movido = false; muestras = [{ t: ahoraMs(), x: e.clientX, y: e.clientY }];
       boton.setPointerCapture(e.pointerId);
     });
     boton.addEventListener('pointermove', e => {
       if (!ini) return;
       const dx = e.clientX - ini.px, dy = e.clientY - ini.py;
       if (!movido && Math.hypot(dx, dy) < 6) return;
-      movido = true; boton.classList.add('arrastrando');
+      if (!movido) { movido = true; boton.classList.add('arrastrando', 'moviendo'); boton.classList.remove('recuperando'); }
       colocar({ x: ini.x + dx, y: ini.y + dy });
+      const t = ahoraMs();
+      muestras.push({ t, x: e.clientX, y: e.clientY });
+      while (muestras.length > 2 && t - muestras[0].t > 90) muestras.shift();
+      const m0 = muestras[0], dtm = Math.max(1, t - m0.t);
+      deformar((e.clientX - m0.x) / dtm, (e.clientY - m0.y) / dtm);
     });
     const soltar = e => {
       if (!ini) return;
       boton.classList.remove('arrastrando');
       if (movido) {
-        const q = colocar({ x: boton.offsetLeft, y: boton.offsetTop });
-        try { localStorage.setItem(CLAVE, JSON.stringify({ modo: movil() ? 'm' : 'd', fx: q.x / window.innerWidth, fy: q.y / window.innerHeight })); } catch (err) {}
+        // velocidad de los últimos ~90 ms para seguir con inercia
+        const t = ahoraMs(), m0 = muestras[0], ult = muestras[muestras.length - 1];
+        const dtm = Math.max(1, ult.t - m0.t), viejo = t - ult.t > 80;
+        const vx = viejo ? 0 : (ult.x - m0.x) / dtm, vy = viejo ? 0 : (ult.y - m0.y) / dtm;
+        if (Math.hypot(vx, vy) > 0.05) deslizar(Math.max(-3, Math.min(3, vx)), Math.max(-3, Math.min(3, vy)));
+        else { recuperar(); colocar({ x: boton.offsetLeft, y: boton.offsetTop }); guardar(); }
       } else if (e.type === 'pointerup') {
-        // un toque: si está escondido, primero vuelve a asomar entero; si no, abre la ayuda
+        // un toque: si está escondido, primero vuelve a asomar entero; si no, se colorea y abre la ayuda
         if (boton.classList.contains('escondido')) {
-          const q = colocar(posicionInicial());
+          colocar(posicionInicial());
           try { localStorage.removeItem(CLAVE); } catch (err) {}
-        } else abrir();
+        } else {
+          boton.classList.add('pulsado');
+          setTimeout(() => { abrir(); boton.classList.remove('pulsado'); }, 140);
+        }
       }
       ini = null;
     };
