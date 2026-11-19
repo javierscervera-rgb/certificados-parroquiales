@@ -29,7 +29,8 @@ const Ayuda = (() => {
         <p>En <strong>⚙ Datos de la parroquia</strong> escribe el nombre, la dirección, la diócesis y el color del membrete, y sube el <strong>logo</strong> y el <strong>sello</strong> (mejor en PNG con fondo transparente). Ahí también van los datos de la Vicaría que usa el Alegato V.</p>`],
       ['3. Firmantes: hay que elegir quién firma para empezar', `
         <p>Mientras no se elige quién firma, los certificados y los registros están <strong>bloqueados</strong>: así ningún documento sale sin firmante.</p>
-        <p>Pulsa <strong>Firmantes</strong> y añade a cada sacerdote con su <strong>nombre</strong>, su <strong>cargo</strong> (párroco, vicario parroquial…) y, si quieres, su <strong>firma escaneada</strong>. Después elígelo en el desplegable <strong>Firma</strong> de la pantalla de inicio. Se puede cambiar también en cada formulario.</p>`],
+        <p>Pulsa <strong>Firmantes</strong> y añade a cada sacerdote con su <strong>nombre</strong>, su <strong>cargo</strong> (párroco, vicario parroquial…) y, si quieres, su <strong>firma escaneada</strong>. Después elígelo en el desplegable <strong>Firma</strong> de la pantalla de inicio. Se puede cambiar también en cada formulario.</p>
+        <p>Cada firmante puede <strong>protegerse con contraseña</strong> (botón «Proteger con contraseña» en Firmantes). Entonces se pide la contraseña cada vez que alguien lo elige para firmar, y su firma queda oculta y sin poder editarse hasta desbloquearlo. Si se olvida no se puede recuperar: otro firmante no puede quitarla.</p>`],
     ]],
     ['Los formularios', false, [
       ['Registros: una ficha por persona o pareja', `
