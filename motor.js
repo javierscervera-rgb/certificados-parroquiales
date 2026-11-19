@@ -59,12 +59,26 @@ const Motor = {
   },
 
   // Ajusta una imagen dentro de una caja manteniendo la proporción
-  async encajar(src, x, y, w, h) {
+  async encajar(src, x, y, w, h, arribaIzq = false) {
     const d = await this.medirImagen(src);
     if (!d) return null;
     const k = Math.min(w / d.w, h / d.h);
     const ww = d.w * k, hh = d.h * k;
+    if (arribaIzq) return { tipo: 'img', src, x, y, w: ww, h: hh };
     return { tipo: 'img', src, x: x + (w - ww) / 2, y: y + (h - hh) / 2, w: ww, h: hh };
+  },
+
+  // Cabecera: logo pegado al margen izquierdo y arriba (sea cual sea su forma),
+  // la línea de color y, justo debajo del logo, el membrete con los datos de la parroquia.
+  async membrete(cfg, ops, color) {
+    let y0 = 152;
+    if (cfg.logo) {
+      const im = await this.encajar(cfg.logo, 43, 14, 185, 118, true);
+      if (im) { ops.push(im); y0 = im.y + im.h + 13; }
+    }
+    ops.push({ tipo: 'linea', x1: cfg.logo ? 242 : 43, y1: 83, x2: 559, y2: 83, color, grosor: 1.2 });
+    [cfg.nombre, cfg.direccion, cfg.localidad, [cfg.cp, (cfg.provincia || '').toUpperCase()].filter(Boolean).join(' '), cfg.web]
+      .filter(Boolean).forEach((l, i) => ops.push(this.texto(l, 43, y0 + i * 10, 7, { color })));
   },
 
   // Divide un texto en palabras con su estilo (los **asteriscos** marcan negrita)
@@ -470,10 +484,7 @@ const Motor = {
     const paginas = [];
     const nueva = async (primera) => {
       const ops = [];
-      if (cfg.logo) { const im = await this.encajar(cfg.logo, 34, 8, 112, 126); if (im) ops.push(im); }
-      ops.push({ tipo: 'linea', x1: cfg.logo ? 242 : 43, y1: 83, x2: 559, y2: 83, color, grosor: 1.2 });
-      [cfg.nombre, cfg.direccion, cfg.localidad, [cfg.cp, (cfg.provincia || '').toUpperCase()].filter(Boolean).join(' '), cfg.web]
-        .filter(Boolean).forEach((l, i) => ops.push(this.texto(l, 43, 152 + i * 10, 7, { color })));
+      await this.membrete(cfg, ops, color);
       const cx = 340;
       ops.push(this.texto('EDICTO AMONESTACIONES', cx, 118, 17, { negrita: true, alinear: 'centro' }));
       ops.push(this.texto('MATRIMONIALES', cx, 145, 17, { negrita: true, alinear: 'centro' }));
@@ -589,11 +600,7 @@ const Motor = {
     const ops = [];
 
     // --- Cabecera
-    if (cfg.logo) { const im = await this.encajar(cfg.logo, 34, 8, 112, 126); if (im) ops.push(im); }
-    ops.push({ tipo: 'linea', x1: cfg.logo ? 242 : 43, y1: 83, x2: 559, y2: 83, color, grosor: 1.2 });
-    const lineasParroquia = [cfg.nombre, cfg.direccion, cfg.localidad,
-      [cfg.cp, (cfg.provincia || '').toUpperCase()].filter(Boolean).join(' '), cfg.web].filter(Boolean);
-    lineasParroquia.forEach((l, i) => ops.push(this.texto(l, 43, 152 + i * 10, 7, { color })));
+    await this.membrete(cfg, ops, color);
     ops.push(this.texto(cfg.localidad || '', 518, 157, 10, { alinear: 'der' }));
     ops.push(this.texto(H.fechaCorta(ctx.fechaDocumento), 518, 171, 10, { alinear: 'der' }));
 
