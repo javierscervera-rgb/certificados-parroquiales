@@ -85,63 +85,6 @@ function confirmar(msg, si = 'Sí', no = 'Cancelar') {
   });
 }
 
-/* Contraseña de los firmantes: se guarda solo una huella (SHA-256 con sal), nunca la contraseña */
-async function huellaClave(clave, sal) {
-  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(sal + '|' + clave));
-  return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
-}
-// Ventana para escribir una contraseña. validar(clave) devuelve '' si vale o el mensaje de error.
-function pedirClave({ titulo, texto = '', nueva = false, boton = 'Aceptar', validar = async () => '' }) {
-  return new Promise(res => {
-    const m = document.createElement('div');
-    m.className = 'modal clave';
-    m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true');
-    m.innerHTML = `<form class="caja" autocomplete="off">
-      <h3>🔒 ${esc(titulo)}</h3>${texto ? `<p>${esc(texto)}</p>` : ''}
-      <input type="password" class="clave-1" placeholder="${nueva ? 'Nueva contraseña' : 'Contraseña'}" autocomplete="${nueva ? 'new-password' : 'current-password'}">
-      ${nueva ? '<input type="password" class="clave-2" placeholder="Repite la contraseña" autocomplete="new-password">' : ''}
-      <div class="clave-error" aria-live="polite"></div>
-      <div class="fila" style="justify-content:flex-end"><button type="button" class="btn" data-r="0">Cancelar</button><button type="submit" class="btn prim">${esc(boton)}</button></div>
-    </form>`;
-    const f = m.querySelector('form'), c1 = m.querySelector('.clave-1'), c2 = m.querySelector('.clave-2'), err = m.querySelector('.clave-error');
-    const fin = v => { m.remove(); document.removeEventListener('keydown', tecla); res(v); };
-    const tecla = e => { if (e.key === 'Escape') fin(null); };
-    document.addEventListener('keydown', tecla);
-    m.addEventListener('click', e => { if (e.target.dataset.r === '0' || e.target === m) fin(null); });
-    f.addEventListener('submit', async e => {
-      e.preventDefault();
-      const v = c1.value;
-      let msg = '';
-      if (!v) msg = 'Escribe la contraseña.';
-      else if (nueva && v.length < 4) msg = 'Pon al menos 4 caracteres.';
-      else if (nueva && v !== c2.value) msg = 'Las dos contraseñas no coinciden.';
-      else msg = await validar(v);
-      if (msg) { err.textContent = msg; c1.select(); m.querySelector('.caja').classList.remove('sacude'); void m.offsetWidth; m.querySelector('.caja').classList.add('sacude'); return; }
-      fin(v);
-    });
-    document.body.appendChild(m);
-    setTimeout(() => c1.focus(), 30);
-  });
-}
-async function claveCorrecta(f, v) { return !!(f.clave && await huellaClave(v, f.clave.sal) === f.clave.huella); }
-// Pide la contraseña del firmante i (si la tiene). Devuelve true si se puede seguir.
-async function comprobarClave(i, para = 'firmar con este firmante') {
-  const f = estado.config.firmas[i];
-  if (!f || !f.clave) return true;
-  const v = await pedirClave({ titulo: f.nombre || 'Firmante protegido', texto: `Escribe la contraseña para ${para}.`,
-    validar: async v => await claveCorrecta(f, v) ? '' : 'Contraseña incorrecta.' });
-  return v != null;
-}
-async function ponerClave(i) {
-  const f = estado.config.firmas[i];
-  const v = await pedirClave({ titulo: f.clave ? 'Cambiar contraseña' : 'Proteger con contraseña', nueva: true, boton: 'Guardar',
-    texto: `Se pedirá cada vez que alguien elija a ${f.nombre || 'este firmante'} para firmar. Si la olvidas no se puede recuperar.` });
-  if (v == null) return;
-  const sal = [...crypto.getRandomValues(new Uint8Array(12))].map(x => x.toString(16).padStart(2, '0')).join('');
-  f.clave = { sal, huella: await huellaClave(v, sal) };
-  guardarConfig(); render(); aviso('Contraseña guardada.');
-}
-
 /* Cuando un mismo dato ha cambiado aquí y en Google Drive, se pregunta cuál se queda */
 function fechaHora(iso) {
   const d = new Date(iso);
@@ -402,14 +345,14 @@ function render() {
   if (estado.vista === 'menu') { ajustarTareas(); if (typeof Callejero !== 'undefined') Callejero.montar(); }
   if (estado.vista !== 'menu') setTimeout(irAlPrimerVacio, 0);
 }
-function irA(vista) { if (vista !== 'firmantes') estado.firmasAbiertas = new Set(); estado.vista = vista; render(); window.scrollTo(0, 0); }
+function irA(vista) { estado.vista = vista; render(); window.scrollTo(0, 0); }
 
 /* ---------------- MENÚ PRINCIPAL ---------------- */
 function vistaMenu() {
   const cfg = estado.config;
   const bloq = sinFirma() ? 'disabled' : '';
   const opcFirmas = (sinFirma() ? '<option value="" selected disabled>Elige quién firma…</option>' : '') +
-    cfg.firmas.map((f, i) => `<option value="${i}" ${i === estado.firma ? 'selected' : ''}>${esc(f.nombre)} — ${esc(f.cargo)}${f.clave ? " 🔒" : ""}</option>`).join('');
+    cfg.firmas.map((f, i) => `<option value="${i}" ${i === estado.firma ? 'selected' : ''}>${esc(f.nombre)} — ${esc(f.cargo)}</option>`).join('');
   const grupos = GRUPOS.map(g => {
     const botones = CERTIFICADOS.filter(c => c.grupo === g.id).map(c =>
       `<button class="cert ${c.estado === 'pendiente' ? 'pend' : ''}" data-abrir="${c.id}" ${bloq}>${c.estado === 'pendiente' ? '<span class="pill">pendiente</span>' : ''}${esc(c.nombre)}</button>`).join('');
@@ -606,7 +549,7 @@ function vistaFormulario() {
   if (cert.formato === 'edicto') return vistaAmonestaciones(cert);
   const listo = cert.estado === 'listo';
   const cfg = estado.config;
-  const opcFirmas = cfg.firmas.map((f, i) => `<option value="${i}" ${i === estado.firma ? 'selected' : ''}>${esc(f.nombre)} — ${esc(f.cargo)}${f.clave ? " 🔒" : ""}</option>`).join('');
+  const opcFirmas = cfg.firmas.map((f, i) => `<option value="${i}" ${i === estado.firma ? 'selected' : ''}>${esc(f.nombre)} — ${esc(f.cargo)}</option>`).join('');
   cert.campos.forEach(c => { if (c.tipo === 'select' && !estado.registro[c.k]) estado.registro[c.k] = c.opciones[0]; });
   cert.campos.forEach(c => { if (c.defecto && estado.registro[c.k] === undefined) estado.registro[c.k] = c.defecto(); });
   let campos = cert.campos.length ? cert.campos.map(campoHTML).join('')
@@ -710,7 +653,7 @@ function parejasEdicto() {
 function vistaAmonestaciones(cert) {
   limpiarAmonestaciones();
   const cfg = estado.config;
-  const opcFirmas = cfg.firmas.map((f, i) => `<option value="${i}" ${i === estado.firma ? 'selected' : ''}>${esc(f.nombre)} — ${esc(f.cargo)}${f.clave ? " 🔒" : ""}</option>`).join('');
+  const opcFirmas = cfg.firmas.map((f, i) => `<option value="${i}" ${i === estado.firma ? 'selected' : ''}>${esc(f.nombre)} — ${esc(f.cargo)}</option>`).join('');
   const lista = amonVivas().sort((a, b) => (a.desde || '').localeCompare(b.desde || ''));
   const nombre = (n, a) => esc([n, a].filter(Boolean).join(' ') || '—');
   const padres = (p, m, o) => (p || m) ? `<small>hij${o} de ${esc([p, m].filter(Boolean).join(' y '))}</small>` : '';
@@ -850,7 +793,7 @@ function vistaExpediente(cert) {
   if (d.documentos === undefined) d.documentos = EXPEDIENTE.DOCUMENTOS;
   if (!d.diligencia) d.diligencia = 'Amonestaciones aquí';
   ['novio', 'novia'].forEach(l => { if (!d[l + '_apellido1'] && !d[l + '_apellido2'] && d[l + '_apellidos']) d[l + '_apellido1'] = d[l + '_apellidos']; });
-  const opcFirmas = cfg.firmas.map((f, i) => `<option value="${i}" ${i === estado.firma ? 'selected' : ''}>${esc(f.nombre)} — ${esc(f.cargo)}${f.clave ? " 🔒" : ""}</option>`).join('');
+  const opcFirmas = cfg.firmas.map((f, i) => `<option value="${i}" ${i === estado.firma ? 'selected' : ''}>${esc(f.nombre)} — ${esc(f.cargo)}</option>`).join('');
   let cuerpo = '';
   if (pest === 'datos') {
     const columna = (lado, titulo) => `<div class="columna-pareja"><h4>${titulo}</h4><div class="rejilla">${
@@ -1170,15 +1113,7 @@ function vistaParroquia() {
 /* ---------------- FIRMANTES ---------------- */
 function vistaFirmantes() {
   const c = estado.config;
-  const abiertas = estado.firmasAbiertas || (estado.firmasAbiertas = new Set());
-  const firmas = c.firmas.map((f, i) => (f.clave && !abiertas.has(i)) ? `
-    <div class="tarjeta firmante cerrado">
-      <div class="firmante-cerrado">
-        <div><strong>${esc(f.nombre) || 'Firmante'}</strong>${f.cargo ? ` <span>— ${esc(f.cargo)}</span>` : ''}
-          <div class="nota">🔒 Protegido con contraseña. La firma y los datos están ocultos.</div></div>
-        <button class="btn" data-abrirf="${i}">Desbloquear para editar</button>
-      </div>
-    </div>` : `
+  const firmas = c.firmas.map((f, i) => `
     <div class="tarjeta firmante">
       <div class="rejilla">
         <div class="campo" style="grid-column:span 8"><label>Nombre y apellidos</label><input type="text" data-f="${i}" data-fk="nombre" value="${esc(f.nombre)}"></div>
@@ -1189,12 +1124,6 @@ function vistaFirmantes() {
           <div class="nota">Mejor en PNG con fondo transparente.</div>
           <div class="fila">${f.firma ? `<button class="btn" data-quitarfirma="${i}">Quitar firma</button>` : ''}${c.firmas.length > 1 ? `<button class="btn" data-borrarf="${i}">Eliminar firmante</button>` : ''}</div>
         </div>
-      </div>
-      <div class="firmante-clave">
-        <span class="nota">${f.clave ? '🔒 Protegido: se pide la contraseña al elegirlo para firmar.' : 'Sin contraseña: cualquiera puede elegirlo para firmar.'}</span>
-        <div class="fila">${f.clave
-          ? `<button class="btn" data-clavef="${i}">Cambiar contraseña</button><button class="btn" data-quitarclave="${i}">Quitar contraseña</button><button class="btn" data-cerrarf="${i}">🔒 Bloquear</button>`
-          : `<button class="btn" data-clavef="${i}">🔒 Proteger con contraseña</button>`}</div>
       </div>
     </div>`).join('');
   return `
@@ -1376,22 +1305,10 @@ document.addEventListener('click', async e => {
       const k = +t.dataset.borrarf;
       estado.config.firmas.splice(k, 1);
       if (estado.firma === k) estado.firma = null; else if (estado.firma > k) estado.firma--;
-      estado.firmasAbiertas = new Set([...(estado.firmasAbiertas || [])].filter(j => j !== k).map(j => j > k ? j - 1 : j));
       guardarConfig(); render();
     }
   }
   else if (t.dataset.quitar) { estado.config[t.dataset.quitar] = ''; guardarConfig(); render(); }
-  else if (t.dataset.abrirf) {
-    const i = +t.dataset.abrirf;
-    if (await comprobarClave(i, 'editar este firmante')) { estado.firmasAbiertas.add(i); render(); }
-  }
-  else if (t.dataset.cerrarf) { estado.firmasAbiertas.delete(+t.dataset.cerrarf); render(); }
-  else if (t.dataset.clavef) ponerClave(+t.dataset.clavef);
-  else if (t.dataset.quitarclave) {
-    if (await confirmar('¿Quitar la contraseña? Cualquiera podrá elegir a este firmante para firmar.', 'Quitar')) {
-      delete estado.config.firmas[+t.dataset.quitarclave].clave; guardarConfig(); render();
-    }
-  }
   else if (t.dataset.quitarfirma) { estado.config.firmas[+t.dataset.quitarfirma].firma = ''; guardarConfig(); render(); }
 });
 
@@ -1459,10 +1376,7 @@ document.addEventListener('change', async e => {
     estado.registro[el.dataset.k] = el.value;
     setTimeout(() => { aplicarBloques(pref); const det = document.querySelector(`details.seccion-exp[data-pref="${pref}"][data-estado="actual"]`); if (det && el.value) det.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
   }
-  if (el.id === 'selFirma') {
-    const i = +el.value, previo = estado.firma;
-    if (i !== previo && !(await comprobarClave(i))) { el.value = previo == null ? '' : String(previo); return; }
-    estado.firma = i; if (estado.vista === 'menu') render(); else actualizarPrevia(); }
+  if (el.id === 'selFirma') { estado.firma = +el.value; if (estado.vista === 'menu') render(); else actualizarPrevia(); }
   else if (el.id === 'parteExp') { estado.parteExp = el.value; actualizarPrevia(); }
   else if (el.dataset.resuelto) {
     estado.registro[el.dataset.resuelto] = el.checked ? '1' : ''; guardarRegistro();
