@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Política de privacidad · Certificados parroquiales</title>
+<script src="tema.js"></script>
+<style>
+  :root { --bg:#171310; --panel:#201D18; --text:#F0E8DC; --muted:#AA9D8F; --line:#37312B; --accent:#D88972; color-scheme: dark; }
+  html[data-tema="claro"] { --bg:#F6F0E7; --panel:#FFFBF5; --text:#2A241D; --muted:#7A6E60; --line:#DDD2C3; --accent:#A4533F; color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font: 16px/1.65 Georgia, "Times New Roman", serif; padding: 2.2rem 1.2rem 4rem; }
+  main { max-width: 46rem; margin: 0 auto; }
+  h1 { font-family: "Fraunces", Georgia, serif; color: var(--accent); font-size: clamp(1.8rem, 5vw, 2.6rem); margin: 0 0 .3rem; line-height:1.1; }
+  h2 { font-family: "Fraunces", Georgia, serif; color: var(--accent); font-size: 1.25rem; margin: 2rem 0 .5rem; }
+  .fecha { color: var(--muted); font: .9rem -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; margin: 0 0 1.5rem; }
+  .resumen { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 10px; padding: .9rem 1.1rem; }
+  a { color: var(--accent); }
+  ul { padding-left: 1.2rem; } li { margin: .25rem 0; }
+  code { font-size: .9em; }
+  .volver { display:inline-block; margin-bottom: 1.2rem; font: .9rem -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+</style>
+</head>
+<body>
+<main>
+<a class="volver" href="./">← Volver a Certificados</a>
+<h1>Política de privacidad</h1>
+<p class="fecha">Certificados parroquiales · Última actualización: 19 de noviembre de 2026</p>
+<p class="resumen">Certificados (<a href="https://certificados.herramientasacerdotal.es/">certificados.herramientasacerdotal.es</a>) es una herramienta web gratuita para preparar certificados y documentos del despacho parroquial. <strong>Los datos de cada parroquia se guardan en su propio Google Drive y en su navegador; nosotros no tenemos copia de ellos.</strong> No vendemos datos, no hay publicidad ni analítica que identifique a nadie.</p>
+
+<h2>1. Responsable</h2>
+<p>La herramienta es un proyecto de <strong>Javier Sánchez-Cervera de los Santos</strong>, residente en España, titular del dominio herramientasacerdotal.es. Contacto: <a href="mailto:javierscervera@gmail.com">javierscervera@gmail.com</a>.</p>
+<p>Los datos de feligreses que cada parroquia introduce (nombres, fechas, datos sacramentales…) son responsabilidad de esa parroquia, que es quien los trata. La herramienta solo es el medio con el que la parroquia los guarda en su propia cuenta.</p>
+
+<h2>2. Qué datos se tratan y dónde quedan</h2>
+<ul>
+  <li><strong>Datos de los formularios</strong> (personas, parejas, testigos, fechas, libros…): se guardan en el navegador de quien los escribe y, si conecta Google Drive, en su propio Drive. No pasan por ningún servidor nuestro.</li>
+  <li><strong>Datos de la parroquia</strong> (membrete, logo, sello, firmantes y sus firmas escaneadas, tareas, amonestaciones activas): igual, en el navegador y en el Drive de la parroquia.</li>
+  <li><strong>Consultas de la ayuda</strong>: si escribes una duda en «Ayuda y dudas», se guarda el texto, el nombre o la parroquia y el correo que indiques, junto con la fecha, en una hoja de cálculo de la cuenta de Google del administrador de Certificados, solo para contestarte. Puedes pedir que se borre.</li>
+  <li><strong>Datos técnicos</strong>: el alojamiento (GitHub Pages) y los servicios de Google pueden registrar la dirección IP, el navegador y la hora de cada petición por seguridad. No los usamos para identificar a nadie.</li>
+</ul>
+
+<h2>3. Uso de Google Drive</h2>
+<p>Al pulsar «Conectar con Google Drive», Google pide permiso para el ámbito <code>drive.file</code>: la herramienta <strong>solo puede ver y modificar los archivos que ella misma crea</strong>, no el resto de tu Drive. Crea la carpeta <em>Certificados parroquiales</em> con una hoja de cálculo de registros y un archivo de configuración, y los lee y actualiza para que los datos estén disponibles en todos los aparatos de la parroquia. También consulta el nombre y el correo de la cuenta conectada para mostrarlos y para saber si es la del administrador.</p>
+
+<h2>4. Uso de Gmail</h2>
+<p>Solo si pulsas «Enviar por mail», Google pide permiso para el ámbito <code>gmail.send</code>. Con él la herramienta <strong>únicamente envía el correo que tú escribes y confirmas</strong> (destinatario, asunto, texto y el PDF adjunto) desde tu cuenta. No lee, no guarda ni borra ningún correo de tu buzón.</p>
+
+<h2>5. Datos de usuario de Google: uso limitado</h2>
+<p>El uso y la transferencia a cualquier otra aplicación de la información recibida de las API de Google se ajustará a la <a href="https://developers.google.com/terms/api-services-user-data-policy">Política de datos de usuario de los servicios de API de Google</a>, incluidos los requisitos de uso limitado. En concreto: los datos de Google solo se usan para las funciones descritas aquí; no se transfieren a terceros, salvo lo necesario para prestar la función o por obligación legal; no se usan para publicidad; nadie los lee salvo que tú lo pidas expresamente (por ejemplo, al enviarnos una consulta), por seguridad o por obligación legal; y no se usan para entrenar modelos de inteligencia artificial.</p>
+
+<h2>6. Servicios de terceros</h2>
+<ul>
+  <li><strong>Google</strong> (inicio de sesión, Drive, Gmail, Apps Script para las consultas de la ayuda): <a href="https://policies.google.com/privacy">política de privacidad de Google</a>.</li>
+  <li><strong>GitHub Pages</strong> aloja la web.</li>
+  <li><strong>Google Fonts</strong> y <strong>unpkg</strong> sirven el tipo de letra y la biblioteca que crea los PDF; reciben la petición del navegador al cargar la página.</li>
+</ul>
+
+<h2>7. Almacenamiento local y cookies</h2>
+<p>La herramienta guarda en el almacenamiento local del navegador los registros, la configuración y algunas preferencias (tamaño de letra, posición del botón de ayuda). Usa una cookie propia, <code>hs-tema</code>, para recordar el modo día o noche en herramientasacerdotal.es. No hay cookies de publicidad ni de seguimiento.</p>
+
+<h2>8. Conservación y borrado</h2>
+<p>Los datos permanecen en tu navegador y en tu Drive mientras tú quieras. Puedes eliminar registros desde la herramienta, borrar la carpeta <em>Certificados parroquiales</em> de tu Drive y borrar los datos del sitio en tu navegador. Las consultas de la ayuda se borran cuando se han atendido o cuando lo pidas.</p>
+
+<h2>9. Revocar el acceso</h2>
+<p>Puedes retirar en cualquier momento los permisos concedidos desde <a href="https://myaccount.google.com/permissions">la página de permisos de tu cuenta de Google</a>.</p>
+
+<h2>10. Tus derechos</h2>
+<p>Puedes ejercer tus derechos de acceso, rectificación, supresión, oposición, limitación y portabilidad escribiendo a <a href="mailto:javierscervera@gmail.com">javierscervera@gmail.com</a>, y reclamar ante la Agencia Española de Protección de Datos (<a href="https://www.aepd.es">aepd.es</a>). Para los datos de feligreses, dirígete a la parroquia correspondiente.</p>
+
+<h2>11. Seguridad</h2>
+<p>Las comunicaciones van cifradas (HTTPS) y los datos quedan protegidos por la seguridad de tu cuenta de Google. Te recomendamos usar la verificación en dos pasos y no dejar la sesión abierta en ordenadores compartidos.</p>
+
+<h2>12. Cambios</h2>
+<p>Si esta política cambia, se publicará aquí con su nueva fecha.</p>
+
+</main>
+</body>
+</html>

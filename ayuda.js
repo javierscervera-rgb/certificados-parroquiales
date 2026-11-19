@@ -157,6 +157,7 @@ const Ayuda = (() => {
             ${preguntas.map(([p, r], i) => `<details class="ayuda-q" ${abierta && i === 0 ? 'open' : ''}><summary>${p}</summary><div class="ayuda-r">${r}</div></details>`).join('')}
           </section>`).join('')}
         <p class="nota ayuda-pie">¿No encuentras la respuesta? Escríbela en el recuadro de arriba.</p>
+        <p class="nota ayuda-pie"><a href="privacidad.html" target="_blank" rel="noopener">Política de privacidad</a> · <a href="terminos.html" target="_blank" rel="noopener">Condiciones de servicio</a></p>
       </div>`;
   }
 
