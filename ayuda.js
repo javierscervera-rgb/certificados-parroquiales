@@ -77,6 +77,9 @@ const Ayuda = (() => {
   const correoUsuario = () => ((gEstado().usuario || {}).email || '');
   const esAdmin = () => !!URL_MSJ() && correoUsuario().toLowerCase() === String(window.MENSAJES_ADMIN || '').toLowerCase();
   let mensajes = null, ultimaRevision = 0, cargando = false;
+  // Mensajes eliminados en esta sesión: nunca vuelven a mostrarse, aunque llegue tarde una lista antigua
+  const borrados = new Set();
+  let version = 0;          // sube con cada eliminación: las respuestas pedidas antes se descartan
   async function llamar(datos) {
     const r = await fetch(URL_MSJ(), { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(datos) });
     const j = await r.json();
@@ -88,13 +91,24 @@ const Ayuda = (() => {
     if (!forzar && Date.now() - ultimaRevision < 120000) return;
     const token = gEstado().token; if (!token) return;
     cargando = true;
-    try { mensajes = (await llamar({ accion: 'listar', token })).mensajes || []; ultimaRevision = Date.now(); }
+    const v = version;
+    try {
+      const lista = (await llamar({ accion: 'listar', token })).mensajes || [];
+      if (v === version) { mensajes = lista.filter(m => !borrados.has(String(m.id))); ultimaRevision = Date.now(); }
+    }
     catch (e) { console.warn('Mensajes:', e); }
     finally { cargando = false; }
-    ponerPunto(mensajes && mensajes.length > 0);
+    pintarBuzon();
+  }
+  function pintarBuzon() {
+    ponerPunto(!!mensajes && mensajes.length > 0);
     const b = panel && panel.querySelector('[data-buzon]'); if (b) b.innerHTML = buzonHTML();
   }
-  function ponerPunto(si) { if (boton) { boton.classList.toggle('con-mensajes', !!si); boton.setAttribute('aria-label', si ? `Ayuda y dudas: ${mensajes.length} mensaje${mensajes.length === 1 ? '' : 's'}` : 'Ayuda y dudas'); } }
+  function ponerPunto(si) {
+    if (!boton) return;
+    boton.classList.toggle('con-mensajes', !!si);
+    boton.setAttribute('aria-label', si ? `Ayuda y dudas: ${mensajes.length} mensaje${mensajes.length === 1 ? '' : 's'}` : 'Ayuda y dudas');
+  }
   const fechaMsj = iso => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString('es-ES', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); };
   function buzonHTML() {
     if (mensajes === null) return `<h3>Mensajes recibidos</h3><p class="nota">Cargando…</p>`;
@@ -314,12 +328,22 @@ const Ayuda = (() => {
         if (c) return copiar(c.dataset.msjCopiar === 'email' ? m.email : m.mensaje);
         if (e.target.closest('[data-msj-borrar]')) {
           if (typeof confirmar === 'function' && !(await confirmar('¿Eliminar este mensaje? Se borra también de la hoja de tu Drive.', 'Eliminar'))) return;
-          li.style.opacity = '.4';
+          // Se quita ya de la lista y del punto rojo; si el servidor falla, vuelve a aparecer
+          const id = String(m.id);
+          borrados.add(id); version++;
+          mensajes = mensajes.filter(x => String(x.id) !== id);
+          pintarBuzon();
           try {
             await llamar({ accion: 'borrar', id: m.id, token: gEstado().token });
-            mensajes = mensajes.filter(x => x !== m); ponerPunto(mensajes.length > 0);
-            panel.querySelector('[data-buzon]').innerHTML = buzonHTML();
-          } catch (err) { li.style.opacity = ''; if (typeof aviso === 'function') aviso('No se pudo eliminar el mensaje.'); }
+            if (typeof aviso === 'function') aviso('Mensaje eliminado.');
+            // se comprueba con el servidor que ya no está
+            ultimaRevision = 0; await revisar(true);
+          } catch (err) {
+            borrados.delete(id); version++;
+            mensajes = [m, ...mensajes].sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+            pintarBuzon();
+            if (typeof aviso === 'function') aviso('No se pudo eliminar el mensaje. Inténtalo de nuevo.');
+          }
         }
       });
       document.addEventListener('keydown', e => { if (e.key === 'Escape' && panel.classList.contains('abierto')) cerrar(); });
