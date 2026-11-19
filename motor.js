@@ -525,7 +525,7 @@ const Motor = {
     const yFdo = Math.max(r.y + 70, 772);
     if (conFirma) {
       if (cfg.sello) { const im = await this.encajar(cfg.sello, 185, yFdo - 92, 128, 138); if (im) ops.unshift(im); }
-      if (firmante.firma) { const im = await this.encajar(firmante.firma, 330, yFdo - 112, 180, 104); if (im) ops.push(im); }
+      if (firmante.firma) { const im = await this.encajar(firmante.firma, 330, yFdo - 112, 180, 104); if (im) { im.y = yFdo + 4 - im.h; ops.push(im); } } // el tercio inferior de la firma pisa el «Fdo.»
     }
     ops.push(this.texto('Fdo. ' + (firmante.nombre || '______________________'), M.der, yFdo, M.cuerpo, { alinear: 'der' }));
     if (firmante.cargo) ops.push(this.texto(firmante.cargo, M.der, yFdo + 16, M.cuerpo, { alinear: 'der' }));
@@ -662,7 +662,7 @@ const Motor = {
     const firmante = ctx.firmante || {};
     if (conFirma && !doc.sinFirmante) {
       if (cfg.sello) { const im = await this.encajar(cfg.sello, 185, yFdo - 92, 128, 138); if (im) ops.unshift(im); }
-      if (firmante.firma) { const im = await this.encajar(firmante.firma, 330, yFdo - 112, 180, 104); if (im) ops.push(im); }
+      if (firmante.firma) { const im = await this.encajar(firmante.firma, 330, yFdo - 112, 180, 104); if (im) { im.y = yFdo + 4 - im.h; ops.push(im); } } // el tercio inferior de la firma pisa el «Fdo.»
     }
     if (!doc.sinFirmante) {
       ops.push(this.texto('Fdo. ' + (firmante.nombre || '______________________'), M.der, yFdo, M.cuerpo, { alinear: 'der' }));
