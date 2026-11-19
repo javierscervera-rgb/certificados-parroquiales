@@ -9,7 +9,6 @@
      ocupa toda la pantalla.
    ============================================================ */
 const Ayuda = (() => {
-  const CORREO = 'javierscervera@gmail.com';
   const CLAVE = 'certificados.ayuda.posicion';
   const ICONO = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
     <path d="M7.9 20A9 9 0 1 1 12 21a9.5 9.5 0 0 1-5.1-1.5L3 21l1.5-3.9A9 9 0 0 1 7.9 20Z"/>
@@ -72,6 +71,51 @@ const Ayuda = (() => {
     ]],
   ];
 
+  /* ---------- Mensajes (Apps Script del administrador) ---------- */
+  const URL_MSJ = () => window.MENSAJES_URL || '';
+  const gEstado = () => (typeof Google !== 'undefined' ? Google.estado() : {});
+  const correoUsuario = () => ((gEstado().usuario || {}).email || '');
+  const esAdmin = () => !!URL_MSJ() && correoUsuario().toLowerCase() === String(window.MENSAJES_ADMIN || '').toLowerCase();
+  let mensajes = null, ultimaRevision = 0, cargando = false;
+  async function llamar(datos) {
+    const r = await fetch(URL_MSJ(), { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(datos) });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'error');
+    return j;
+  }
+  async function revisar(forzar) {
+    if (!esAdmin() || cargando) { if (!esAdmin()) ponerPunto(false); return; }
+    if (!forzar && Date.now() - ultimaRevision < 120000) return;
+    const token = gEstado().token; if (!token) return;
+    cargando = true;
+    try { mensajes = (await llamar({ accion: 'listar', token })).mensajes || []; ultimaRevision = Date.now(); }
+    catch (e) { console.warn('Mensajes:', e); }
+    finally { cargando = false; }
+    ponerPunto(mensajes && mensajes.length > 0);
+    const b = panel && panel.querySelector('[data-buzon]'); if (b) b.innerHTML = buzonHTML();
+  }
+  function ponerPunto(si) { if (boton) { boton.classList.toggle('con-mensajes', !!si); boton.setAttribute('aria-label', si ? `Ayuda y dudas: ${mensajes.length} mensaje${mensajes.length === 1 ? '' : 's'}` : 'Ayuda y dudas'); } }
+  const fechaMsj = iso => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString('es-ES', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); };
+  function buzonHTML() {
+    if (mensajes === null) return `<h3>Mensajes recibidos</h3><p class="nota">Cargando…</p>`;
+    if (!mensajes.length) return `<h3>Mensajes recibidos</h3><p class="nota">No hay mensajes.</p>`;
+    return `<h3>Mensajes recibidos <span class="ayuda-cuenta">${mensajes.length}</span></h3>
+      <ul class="ayuda-mensajes">${mensajes.map(m => `<li data-msj="${esc(m.id)}">
+        <div class="msj-cab"><strong>${esc(m.nombre || 'Sin nombre')}</strong><span>${esc(fechaMsj(m.fecha))}</span></div>
+        ${m.email ? `<div class="msj-correo">${esc(m.email)}</div>` : ''}
+        <p class="msj-texto">${esc(m.mensaje)}</p>
+        <div class="msj-acc">
+          <button type="button" class="btn" data-msj-copiar="texto">Copiar texto</button>
+          ${m.email ? `<button type="button" class="btn" data-msj-copiar="email">Copiar correo</button>` : ''}
+          <button type="button" class="btn peligro" data-msj-borrar>Eliminar</button>
+        </div></li>`).join('')}</ul>`;
+  }
+  async function copiar(t) {
+    try { await navigator.clipboard.writeText(t); }
+    catch (e) { const a = document.createElement('textarea'); a.value = t; document.body.appendChild(a); a.select(); document.execCommand('copy'); a.remove(); }
+    if (typeof aviso === 'function') aviso('Copiado.');
+  }
+
   function panelHTML() {
     const cfg = (typeof estado !== 'undefined' && estado.config) || {};
     return `<div class="ayuda-cab">
@@ -79,13 +123,18 @@ const Ayuda = (() => {
         <button type="button" class="ayuda-cerrar" data-ayuda-cerrar aria-label="Cerrar la ayuda">✕</button>
       </div>
       <div class="ayuda-cuerpo">
+        ${esAdmin() ? `<section class="ayuda-buzon" data-buzon>${buzonHTML()}</section>` : ''}
         <form class="ayuda-pregunta" data-ayuda-form>
           <label for="ayudaTexto">¿Tienes una duda o una sugerencia? Escríbela aquí</label>
-          <textarea id="ayudaTexto" rows="3" placeholder="Por ejemplo: no consigo enviar el certificado por correo…"></textarea>
-          <input id="ayudaQuien" type="text" placeholder="Tu nombre o tu parroquia (opcional)" value="${esc(cfg.nombre || '')}" autocomplete="off">
+          <textarea id="ayudaTexto" rows="3" maxlength="5000" placeholder="Por ejemplo: no consigo enviar el certificado por correo…"></textarea>
+          <div class="ayuda-datos">
+            <input id="ayudaQuien" type="text" placeholder="Tu nombre o tu parroquia" value="${esc(cfg.nombre || '')}" autocomplete="off" maxlength="200">
+            <input id="ayudaCorreo" type="email" placeholder="Tu correo, para poder contestarte" value="${esc(correoUsuario())}" autocomplete="email" maxlength="200">
+          </div>
+          <input type="text" id="ayudaWeb2" class="ayuda-trampa" tabindex="-1" autocomplete="off" aria-hidden="true">
           <div class="ayuda-enviar">
-            <button type="submit" class="btn prim">Enviar la consulta</button>
-            <span class="nota">Se abre tu correo con el mensaje para <a href="mailto:${CORREO}">${CORREO}</a></span>
+            <button type="submit" class="btn prim" data-ayuda-enviar>Enviar la consulta</button>
+            <span class="nota" data-ayuda-estado>Llega directamente al administrador de Certificados.</span>
           </div>
         </form>
         ${SECCIONES.map(([titulo, abierta, preguntas]) => `
@@ -93,7 +142,7 @@ const Ayuda = (() => {
             <h3>${titulo}</h3>
             ${preguntas.map(([p, r], i) => `<details class="ayuda-q" ${abierta && i === 0 ? 'open' : ''}><summary>${p}</summary><div class="ayuda-r">${r}</div></details>`).join('')}
           </section>`).join('')}
-        <p class="nota ayuda-pie">¿No encuentras la respuesta? Escribe arriba o a <a href="mailto:${CORREO}">${CORREO}</a>.</p>
+        <p class="nota ayuda-pie">¿No encuentras la respuesta? Escríbela en el recuadro de arriba.</p>
       </div>`;
   }
 
@@ -225,6 +274,9 @@ const Ayuda = (() => {
     boton.addEventListener('click', e => e.preventDefault());
     window.addEventListener('resize', recolocar);
     recolocar();
+    // El administrador ve un punto rojo si hay mensajes: se mira al conectar, al volver a la pestaña y cada pocos minutos
+    setInterval(() => revisar(false), 20000);
+    window.addEventListener('focus', () => revisar(true));
   }
 
   /* ---------- Panel ---------- */
@@ -236,18 +288,44 @@ const Ayuda = (() => {
       document.body.appendChild(panel);
       fondo.addEventListener('click', cerrar);
       panel.addEventListener('click', e => { if (e.target.closest('[data-ayuda-cerrar]')) cerrar(); });
-      panel.addEventListener('submit', e => {
+      panel.addEventListener('submit', async e => {
         if (!e.target.matches('[data-ayuda-form]')) return;
         e.preventDefault();
-        const texto = panel.querySelector('#ayudaTexto').value.trim();
-        if (!texto) { panel.querySelector('#ayudaTexto').focus(); return; }
-        const quien = panel.querySelector('#ayudaQuien').value.trim();
-        const cuerpo = `${texto}\n\n— ${quien || 'Usuario de Certificados'}\n(Enviado desde la ayuda de Certificados: ${location.host})`;
-        location.href = `mailto:${CORREO}?subject=${encodeURIComponent('Duda sobre Certificados' + (quien ? ' · ' + quien : ''))}&body=${encodeURIComponent(cuerpo)}`;
+        const $ = sel => panel.querySelector(sel), estadoTxt = $('[data-ayuda-estado]'), bot = $('[data-ayuda-enviar]');
+        const texto = $('#ayudaTexto').value.trim();
+        if (!texto) { $('#ayudaTexto').focus(); return; }
+        if (!URL_MSJ()) { estadoTxt.textContent = 'El envío de consultas aún no está activado.'; return; }
+        bot.disabled = true; estadoTxt.textContent = 'Enviando…';
+        try {
+          await llamar({ accion: 'enviar', mensaje: texto, nombre: $('#ayudaQuien').value.trim(), email: $('#ayudaCorreo').value.trim(),
+            parroquia: (typeof estado !== 'undefined' && estado.config.nombre) || '', web: location.host, web2: $('#ayudaWeb2').value });
+          $('#ayudaTexto').value = '';
+          estadoTxt.textContent = '✓ Enviada. ¡Gracias! Te contestaremos lo antes posible.';
+          estadoTxt.classList.add('ok');
+          if (esAdmin()) revisar(true);
+        } catch (err) {
+          estadoTxt.textContent = 'No se pudo enviar. Comprueba la conexión a internet y vuelve a intentarlo.';
+        } finally { bot.disabled = false; }
+      });
+      panel.addEventListener('click', async e => {
+        const li = e.target.closest('[data-msj]'); if (!li) return;
+        const m = (mensajes || []).find(x => String(x.id) === li.dataset.msj); if (!m) return;
+        const c = e.target.closest('[data-msj-copiar]');
+        if (c) return copiar(c.dataset.msjCopiar === 'email' ? m.email : m.mensaje);
+        if (e.target.closest('[data-msj-borrar]')) {
+          if (typeof confirmar === 'function' && !(await confirmar('¿Eliminar este mensaje? Se borra también de la hoja de tu Drive.', 'Eliminar'))) return;
+          li.style.opacity = '.4';
+          try {
+            await llamar({ accion: 'borrar', id: m.id, token: gEstado().token });
+            mensajes = mensajes.filter(x => x !== m); ponerPunto(mensajes.length > 0);
+            panel.querySelector('[data-buzon]').innerHTML = buzonHTML();
+          } catch (err) { li.style.opacity = ''; if (typeof aviso === 'function') aviso('No se pudo eliminar el mensaje.'); }
+        }
       });
       document.addEventListener('keydown', e => { if (e.key === 'Escape' && panel.classList.contains('abierto')) cerrar(); });
     }
     panel.innerHTML = panelHTML();
+    if (esAdmin()) revisar(true);
     panel.classList.add('abierto'); fondo.classList.add('abierto');
     document.body.classList.add('ayuda-abierta');
     boton.classList.add('oculto-por-panel');
@@ -262,5 +340,5 @@ const Ayuda = (() => {
   }
 
   function iniciar() { if (!boton) crearBoton(); }
-  return { iniciar, abrir, cerrar, recolocar };
+  return { iniciar, abrir, cerrar, recolocar, revisar };
 })();

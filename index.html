@@ -289,6 +289,7 @@
     animation: ayuda-flota 3.2s ease-in-out infinite; transition: opacity .2s;
   }
   .ayuda-boton svg { width: 24px; height: 24px; pointer-events: none; }
+  .ayuda-boton { overflow: visible; }
   .ayuda-boton.pulsado { background: var(--azul); color: var(--sobre-acento); transform: scale(.92); transition: background .1s, color .1s, transform .1s; }
   .ayuda-boton.moviendo { animation: none; }
   .ayuda-boton.recuperando { transition: transform .5s cubic-bezier(.34, 1.8, .5, 1); }
@@ -313,6 +314,24 @@
   .ayuda-cuerpo { overflow-y: auto; padding: 14px 18px 30px; -webkit-overflow-scrolling: touch; }
   .ayuda-pregunta { display: grid; gap: 8px; background: var(--acento-suave); border: 1px solid var(--borde); border-radius: 12px; padding: 12px; margin-bottom: 8px; }
   .ayuda-pregunta label { font-weight: 700; font-size: 14px; }
+  .ayuda-datos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  @media (max-width: 480px) { .ayuda-datos { grid-template-columns: 1fr; } }
+  .ayuda-trampa { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+  [data-ayuda-estado].ok { color: var(--ok-tinta); font-weight: 600; }
+  /* Buzón del administrador */
+  .ayuda-buzon { border: 1.5px solid var(--azul); border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; }
+  .ayuda-buzon h3 { margin: 0 0 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--azul); display: flex; align-items: center; gap: 8px; }
+  .ayuda-cuenta { background: #d93025; color: #fff; border-radius: 999px; padding: 1px 7px; font-size: 11px; letter-spacing: 0; }
+  .ayuda-mensajes { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; max-height: 50vh; overflow-y: auto; }
+  .ayuda-mensajes li { background: var(--campo); border: 1px solid var(--borde); border-radius: 10px; padding: 10px; }
+  .msj-cab { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+  .msj-cab span { color: var(--suave); font-size: 12px; }
+  .msj-correo { font-size: 12.5px; color: var(--azul); margin-top: 2px; word-break: break-all; }
+  .msj-texto { margin: 6px 0 8px; white-space: pre-wrap; font-size: 14px; line-height: 1.5; }
+  .msj-acc { display: flex; gap: 6px; flex-wrap: wrap; }
+  .msj-acc .btn { padding: 5px 10px; font-size: 12.5px; }
+  /* Punto rojo en el botón cuando hay mensajes para el administrador */
+  .ayuda-boton.con-mensajes::after { content: ''; position: absolute; top: 1px; right: 1px; width: 12px; height: 12px; border-radius: 50%; background: #d93025; box-shadow: 0 0 0 2px var(--papel); }
   .ayuda-pregunta textarea { resize: vertical; min-height: 70px; }
   .ayuda-enviar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
   .ayuda-enviar .nota { margin: 0; font-size: 12px; }
@@ -435,7 +454,7 @@
 
   .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--tinta); color: var(--fondo); padding: 10px 16px; border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90vw; }
   .toast.on { opacity: 1; }
-  .modal { position: fixed; inset: 0; background: rgba(20,22,28,.45); display: grid; place-items: center; padding: 20px; }
+  .modal { position: fixed; inset: 0; z-index: 90; background: rgba(20,22,28,.45); display: grid; place-items: center; padding: 20px; }
   .modal .caja { background: var(--papel); border-radius: 14px; padding: 22px; max-width: 420px; width: 100%; }
   .modal .caja p { margin: 0 0 16px; line-height: 1.5; }
   .modal.conflictos { z-index: 100; }
