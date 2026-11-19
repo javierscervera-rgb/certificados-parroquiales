@@ -1407,6 +1407,7 @@ window.addEventListener('focus', () => Google.refrescar());
 (async () => {
   await Motor.iniciar();
   render();
+  if (typeof Ayuda !== 'undefined') Ayuda.iniciar();
   // Si la página se abre dentro de Claude, usa su sistema de descargas
   if (window.claude && typeof window.claude.use === 'function') {
     window.claude.use('downloads').then(d => { estado.descargas = d; }).catch(() => {});
