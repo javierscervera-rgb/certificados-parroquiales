@@ -515,7 +515,7 @@ const CERTIFICADOS = [
     }
   },
   {
-    id: 'registro_civil', grupo: 'matrimonio', estado: 'listo', sinCorreo: true,
+    id: 'registro_civil', grupo: 'matrimonio', estado: 'listo', sinCorreo: true, soloSinFirma: true,
     nombre: 'Certificado registro civil', titulo: 'Certificación eclesiástica de matrimonio para el Registro Civil',
     // Los datos de los novios son los mismos del expediente y el Alegato V; se añaden los que pide el impreso
     camposPareja: [

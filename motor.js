@@ -534,7 +534,8 @@ const Motor = {
 
 
   /* ---------- CERTIFICACIÓN PARA EL REGISTRO CIVIL (4 ejemplares sobre el impreso oficial) ---------- */
-  async maquetarRegistroCivil(d, ctx, conFirma) {
+  async maquetarRegistroCivil(d, ctx) {
+    const conFirma = false; // este impreso siempre sale sin firma ni sello: se firma a mano
     const cfg = ctx.config, f = ctx.firmante || {};
     const MAY = v => String(v || '').toLocaleUpperCase('es');
     const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -560,6 +561,9 @@ const Motor = {
       });
     });
     v.novio_derecho = MAY(d.novio_derecho);
+    // Pie de cada hoja: «En [ciudad] a [día] de [mes] de [año]» con la fecha del documento
+    const fd = partes(ctx.fechaDocumento);
+    Object.assign(v, { fecha_ciudad: MAY(cfg.localidad), fecha_dia: fd.d, fecha_mes: MAY(fd.m), fecha_anio: fd.a });
     const b = partes(d.f_mat);
     Object.assign(v, { boda_anio: b.a, boda_mes: b.m, boda_dia: b.d, boda_hora: d.hora_boda || '' });
     // observaciones: lo que no cabe en la primera línea sigue en la segunda

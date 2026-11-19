@@ -586,11 +586,11 @@ function vistaFormulario() {
         <button class="acc" data-registro="nuevo">${IC.nuevo}Nuevo registro</button>
         <button class="miniatura" id="previa" title="Pulsa para ampliar" ${listo ? '' : 'disabled'}></button>
         <div class="grupo-acc"><span>${IC.imprimir}Imprimir</span>
-          <button class="acc" data-imprimir="1" ${listo ? '' : 'disabled'}>${IC.pluma}<span>Con firma<small>Con sello y firma escaneada</small></span></button>
+          ${cert.soloSinFirma ? '' : `<button class="acc" data-imprimir="1" ${listo ? '' : 'disabled'}>${IC.pluma}<span>Con firma<small>Con sello y firma escaneada</small></span></button>`}
           <button class="acc" data-imprimir="0" ${listo ? '' : 'disabled'}>${IC.pdf.replace('M12 10v7M9 14l3 3 3-3', 'M9 12h6M9 16h6')}<span>Sin firma<small>Para firmar a mano</small></span></button>
         </div>
         <div class="grupo-acc"><span>${IC.guardar}Guardar PDF</span>
-          <button class="acc" data-pdf="1" ${listo ? '' : 'disabled'}>${IC.pluma}<span>Con firma<small>Con sello y firma escaneada</small></span></button>
+          ${cert.soloSinFirma ? '' : `<button class="acc" data-pdf="1" ${listo ? '' : 'disabled'}>${IC.pluma}<span>Con firma<small>Con sello y firma escaneada</small></span></button>`}
           <button class="acc" data-pdf="0" ${listo ? '' : 'disabled'}>${IC.pdf.replace('M12 10v7M9 14l3 3 3-3', 'M9 12h6M9 16h6')}<span>Sin firma<small>Para firmar a mano</small></span></button>
         </div>
         ${cert.sinCorreo ? '' : `<button class="acc" data-correo ${listo ? '' : 'disabled'}>${IC.mail}<span>Enviar por mail<small>PDF adjunto, desde tu Gmail</small></span></button>`}
