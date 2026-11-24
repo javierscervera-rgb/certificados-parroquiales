@@ -546,6 +546,7 @@ function vistaFormulario() {
   const cert = CERTIFICADOS.find(c => c.id === estado.certId);
   if (cert.formato === 'expediente') return vistaExpediente(cert);
   if (cert.formato === 'edicto') return vistaAmonestaciones(cert);
+  if (cert.formato === 'cursillo_lote') return vistaCursillo(cert);
   const listo = cert.estado === 'listo';
   const cfg = estado.config;
   const opcFirmas = cfg.firmas.map((f, i) => `<option value="${i}" ${i === estado.firma ? 'selected' : ''}>${esc(f.nombre)} — ${esc(f.cargo)}</option>`).join('');
@@ -698,6 +699,127 @@ function vistaAmonestaciones(cert) {
       </div>
     </div>
   </main>`;
+}
+
+
+/* ---------------- CERTIFICADOS DEL CURSILLO (por lotes) ----------------
+   Se pegan los nombres desde una hoja de cálculo; se guardan SOLO en este navegador
+   (no van a Google Drive). Un certificado por pareja, todos en un mismo PDF. */
+function cursillo() {
+  if (!estado.cursillo) estado.cursillo = Almacen.leer('cursillo', null) || { parejas: [], desde: '', hasta: '', paso: 'pegar', pegado: '' };
+  return estado.cursillo;
+}
+function guardarCursillo() { Almacen.guardar('cursillo', estado.cursillo); }
+const cursilloValidas = () => cursillo().parejas.filter(p => (p.novio || '').trim() || (p.novia || '').trim());
+
+// Convierte lo pegado (Excel, Google Sheets, CSV…) en parejas {novio, novia}
+function leerParejas(texto) {
+  const limpia = c => String(c || '').replace(/^"(.*)"$/s, '$1').replace(/""/g, '"').replace(/\s+/g, ' ').trim();
+  let filas = String(texto || '').replace(/\r/g, '').split('\n').filter(l => l.trim());
+  const tab = filas.some(l => l.includes('\t'));
+  const sep = tab ? '\t' : filas.some(l => l.includes(';')) ? ';' : filas.some(l => l.includes(',')) ? ',' : null;
+  let celdas = filas.map(l => (sep ? l.split(sep) : [l]).map(limpia));
+  // fila de títulos (Nombre, Apellidos, Novio, Novia…)
+  if (celdas.length && celdas[0].some(c => /^(nombre|apellidos?|1[ºo°]? ?apellido|2[ºo°]? ?apellido|novio|novia|él|ella|contrayentes?)\b/i.test(c))) celdas.shift();
+  celdas = celdas.map(f => { while (f.length && !f[f.length - 1]) f.pop(); return f; }).filter(f => f.some(Boolean));
+  const unir = a => a.filter(Boolean).join(' ');
+  const parejas = [];
+  const sueltas = [];
+  celdas.forEach(f => {
+    const n = f.length;
+    if (n >= 6) parejas.push({ novio: unir(f.slice(0, 3)), novia: unir(f.slice(3, 6)) });
+    else if (n === 4) parejas.push({ novio: unir(f.slice(0, 2)), novia: unir(f.slice(2, 4)) });
+    else if (n === 2 || n === 3 || n === 5) parejas.push({ novio: f[0], novia: f[1] });
+    else {
+      const m = /^(.+?)\s+(?:y|e|-|–|\/|&)\s+(.+)$/i.exec(f[0]);
+      if (m) parejas.push({ novio: m[1].trim(), novia: m[2].trim() });
+      else sueltas.push(f[0]);
+    }
+  });
+  // nombres sueltos, uno por fila: se emparejan de dos en dos
+  for (let i = 0; i < sueltas.length; i += 2) parejas.push({ novio: sueltas[i], novia: sueltas[i + 1] || '' });
+  return parejas.map(p => ({ id: nuevoId(), ...p }));
+}
+
+function vistaCursillo(cert) {
+  const c = cursillo(), cfg = estado.config;
+  const opcFirmas = cfg.firmas.map((f, i) => `<option value="${i}" ${i === estado.firma ? 'selected' : ''}>${esc(f.nombre)} — ${esc(f.cargo)}</option>`).join('');
+  const fechas = `
+    <div class="campo" style="grid-column:span 4"><label for="cur_desde">Inicio del cursillo</label><input type="date" id="cur_desde" data-cur="desde" value="${esc(c.desde)}"></div>
+    <div class="campo" style="grid-column:span 4"><label for="cur_hasta">Final del cursillo</label><input type="date" id="cur_hasta" data-cur="hasta" value="${esc(c.hasta)}"></div>`;
+  const n = cursilloValidas().length;
+  let cuerpo;
+  if (c.paso === 'pegar' || !c.parejas.length) {
+    const previa = leerParejas(c.pegado);
+    cuerpo = `
+      <div class="cab-registros"><h3>1. Pega los nombres de las parejas</h3><span class="contador">${c.parejas.length ? `${c.parejas.length} en la lista` : ''}</span></div>
+      <p class="nota">Copia de tu Excel, Google Sheets o CSV las columnas con los nombres (una pareja por fila) y pégalas aquí. Vale con dos columnas (novio · novia) o con nombre y apellidos por separado.</p>
+      <textarea id="cur_pegado" class="cur-pegado" rows="9" placeholder="Pedro García López	Ana Martín Ruiz&#10;Luis Pérez Gil	Marta Sanz Gómez">${esc(c.pegado)}</textarea>
+      <div class="cur-detectadas" id="cur_detectadas">${detectadasHTML(previa)}</div>
+      <div class="rejilla" style="margin-top:12px">${fechas}</div>
+      <div class="fila" style="margin-top:14px;flex-wrap:wrap">
+        <button class="btn prim" data-cur-pasar="sustituir" ${previa.length ? '' : 'disabled'}>${c.parejas.length ? 'Sustituir la lista' : 'Continuar'} →</button>
+        ${c.parejas.length ? `<button class="btn" data-cur-pasar="anadir" ${previa.length ? '' : 'disabled'}>Añadir a la lista (${c.parejas.length})</button><button class="btn" data-cur-paso="lista">Ver la lista sin cambios</button>` : ''}
+      </div>`;
+  } else {
+    const filas = c.parejas.map((p, i) => `<li class="cur-pareja">
+        <span class="cur-n">${i + 1}</span>
+        <input type="text" data-cur-pareja="${p.id}" data-campo="novio" value="${esc(p.novio)}" placeholder="Nombre y apellidos de él" aria-label="Novio">
+        <span class="cur-y">y</span>
+        <input type="text" data-cur-pareja="${p.id}" data-campo="novia" value="${esc(p.novia)}" placeholder="Nombre y apellidos de ella" aria-label="Novia">
+        <button class="tarea-borrar" data-cur-borrar="${p.id}" title="Eliminar" aria-label="Eliminar">${IC.papelera}</button>
+      </li>`).join('');
+    cuerpo = `
+      <div class="rejilla">${fechas}</div>
+      <hr class="sep">
+      <div class="cab-registros"><h3>2. Parejas</h3><span class="contador">${n} certificado${n === 1 ? '' : 's'}</span></div>
+      <ul class="lista-cursillo">${filas}</ul>
+      <div class="fila" style="margin-top:12px;flex-wrap:wrap">
+        <button class="btn prim" data-cur-anadir>${IC.nuevo}Añadir pareja</button>
+        <button class="btn" data-cur-paso="pegar">Pegar más nombres…</button>
+        <button class="btn peligro" data-cur-vaciar>${IC.papelera}Vaciar la lista</button>
+      </div>`;
+  }
+  const hay = n > 0 ? '' : 'disabled';
+  return `
+  ${cabecera(esc(cert.titulo))}
+  <main>
+    ${accionesArriba(false)}
+    <div class="form-layout">
+      <div class="tarjeta">
+        <div class="rejilla">
+          <div class="campo" style="grid-column:span 8"><label for="selFirma">Firma</label><select id="selFirma">${opcFirmas}</select></div>
+        </div>
+        <hr class="sep">
+        ${cuerpo}
+        <p class="nota" style="margin-top:16px">🔒 Estos nombres se guardan solo en este navegador: no se suben a Google Drive.</p>
+      </div>
+      <div class="lateral">
+        <button class="acc" data-ir="menu">${IC.menu}Menú principal</button>
+        <button class="miniatura apaisada" id="previa" title="Pulsa para ampliar" ${hay}></button>
+        <div class="grupo-acc"><span>${IC.imprimir}Imprimir todos</span>
+          <button class="acc" data-imprimir="1" ${hay}>${IC.pluma}<span>Con firma<small>Con sello y firma escaneada</small></span></button>
+          <button class="acc" data-imprimir="0" ${hay}>${IC.pdf.replace('M12 10v7M9 14l3 3 3-3', 'M9 12h6M9 16h6')}<span>Sin firma<small>Para firmar a mano</small></span></button>
+        </div>
+        <div class="grupo-acc"><span>${IC.guardar}Guardar PDF con todos</span>
+          <button class="acc" data-pdf="1" ${hay}>${IC.pluma}<span>Con firma<small>Con sello y firma escaneada</small></span></button>
+          <button class="acc" data-pdf="0" ${hay}>${IC.pdf.replace('M12 10v7M9 14l3 3 3-3', 'M9 12h6M9 16h6')}<span>Sin firma<small>Para firmar a mano</small></span></button>
+        </div>
+        <button class="acc" data-correo ${hay}>${IC.mail}<span>Enviar por mail<small>Un PDF con todos, desde tu Gmail</small></span></button>
+      </div>
+    </div>
+  </main>`;
+}
+function refrescarCursilloBotones() {
+  const hay = cursilloValidas().length;
+  document.querySelectorAll('.lateral [data-imprimir], .lateral [data-pdf], .lateral [data-correo], #previa').forEach(b => { b.disabled = !hay; });
+  const cont = document.querySelector('.lista-cursillo')?.closest('.tarjeta')?.querySelector('.cab-registros .contador');
+  if (cont) cont.textContent = `${hay} certificado${hay === 1 ? '' : 's'}`;
+}
+function detectadasHTML(lista) {
+  if (!lista.length) return '<span class="nota">Aún no hay nombres.</span>';
+  const muestra = lista.slice(0, 4).map(p => `<li><strong>${esc(p.novio || '—')}</strong> y <strong>${esc(p.novia || '—')}</strong></li>`).join('');
+  return `<p><strong>${lista.length} pareja${lista.length === 1 ? '' : 's'}</strong> detectada${lista.length === 1 ? '' : 's'}:</p><ul>${muestra}${lista.length > 4 ? `<li class="nota">… y ${lista.length - 4} más</li>` : ''}</ul>`;
 }
 
 function editarAmonestacion(id) {
@@ -893,7 +1015,7 @@ function abrirAmpliada() {
   m.addEventListener('click', e => { if (e.target === m || e.target.closest('[data-cerrar]')) m.remove(); });
   document.body.appendChild(m);
 }
-function ctx() { return { config: estado.config, firmante: firmante(), fechaDocumento: estado.fechaDocumento, parteExpediente: estado.parteExp, edicto: parejasEdicto() }; }
+function ctx() { return { config: estado.config, firmante: firmante(), fechaDocumento: estado.fechaDocumento, parteExpediente: estado.parteExp, edicto: parejasEdicto(), cursillo: cursillo() }; }
 
 async function crearPDF(conFirma) {
   const cert = CERTIFICADOS.find(c => c.id === estado.certId);
@@ -901,7 +1023,8 @@ async function crearPDF(conFirma) {
   const bytes = await Motor.aPDF(res, cert.titulo);
   const quien = tituloRegistro(actual()).replace('(registro vacío)', '');
   const parte = cert.formato === 'expediente' ? ' - ' + (EXPEDIENTE.partes.find(p => p.id === estado.parteExp) || {}).nombre : '';
-  const nombre = cert.formato === 'edicto' ? `Edicto de amonestaciones ${H.fechaCorta(estado.fechaDocumento).replace(/\//g, '-')}.pdf`
+  const nombre = cert.formato === 'cursillo_lote' ? `Certificados cursillo prematrimonial${cursillo().desde ? ' ' + H.fechaCorta(cursillo().desde).replace(/\//g, '-') : ''}.pdf`
+    : cert.formato === 'edicto' ? `Edicto de amonestaciones ${H.fechaCorta(estado.fechaDocumento).replace(/\//g, '-')}.pdf`
     : `${cert.formato === 'expediente' ? 'Expediente matrimonial' : cert.nombre}${parte}${quien ? ' - ' + quien : ''}.pdf`.replace(/[\\/:*?"<>|]/g, '');
   return { bytes, nombre, cert };
 }
@@ -919,9 +1042,11 @@ const esSafari = esIOS || /^((?!chrome|chromium|android|crios|fxios|edg).)*safar
 async function imprimir(conFirma) {
   const cert = CERTIFICADOS.find(c => c.id === estado.certId);
   const res = await Motor.maquetar(cert, estado.registro, ctx(), conFirma);
-  const nombre = cert.nombre + (tituloRegistro(actual()) !== '(registro vacío)' ? ' - ' + tituloRegistro(actual()) : '');
+  const nombre = cert.formato === 'cursillo_lote' ? 'Certificados cursillo prematrimonial'
+    : cert.nombre + (tituloRegistro(actual()) !== '(registro vacío)' ? ' - ' + tituloRegistro(actual()) : '');
   if (!esSafari) return imprimirPDF(await Motor.aPDF(res, nombre));
-  return imprimirSafari(conFirma, () => imprimirHojas(Motor.paginas(res), nombre));
+  // las hojas apaisadas no se imprimen bien «desde la página»: solo el PDF
+  return imprimirSafari(conFirma, cert.formato === 'cursillo_lote' ? null : () => imprimirHojas(Motor.paginas(res), nombre));
 }
 
 /* Safari (iPhone, iPad y Mac): se imprime el PDF del certificado, no la página.
@@ -943,7 +1068,7 @@ async function imprimirSafari(conFirma, metodoAnterior) {
         : 'Pulsa <strong>Abrir para imprimir</strong>: el certificado se abre en una pestaña nueva. Allí pulsa <strong>⌘P</strong> (o Archivo › Imprimir).'}</p>
       <button type="button" class="btn prim grande" data-is="principal">${IC.imprimir}${compartir ? 'Imprimir' : esIOS ? 'Abrir el PDF' : 'Abrir para imprimir'}</button>
       <div class="fila" style="justify-content:space-between;margin-top:14px">
-        <button type="button" class="btn enlace" data-is="anterior">Imprimir desde la página (método anterior)</button>
+        ${metodoAnterior ? '<button type="button" class="btn enlace" data-is="anterior">Imprimir desde la página (método anterior)</button>' : '<span></span>'}
         <button type="button" class="btn" data-is="cerrar">Cerrar</button>
       </div>
     </div>`;
@@ -1030,14 +1155,16 @@ function abrirCorreo() {
   }
   const cert = CERTIFICADOS.find(c => c.id === estado.certId);
   const f = firmante(), cfg = estado.config;
-  const quien = tituloRegistro(actual()).replace('(registro vacío)', '');
-  const asunto = `${cert.nombre}${quien ? ' - ' + quien : ''}`;
-  const texto = `Buenos días:\n\nLe adjunto el ${cert.nombre.toLowerCase()}${quien ? ' de ' + quien : ''}.\n\nUn saludo,\n\n${f.nombre || ''}\n${f.cargo || ''}\n${cfg.nombre || ''}`;
+  const lote = cert.formato === 'cursillo_lote';
+  const quien = lote ? '' : tituloRegistro(actual()).replace('(registro vacío)', '');
+  const asunto = lote ? 'Certificados del cursillo prematrimonial' : `${cert.nombre}${quien ? ' - ' + quien : ''}`;
+  const texto = lote ? `Buenos días:\n\nLe adjunto los certificados de asistencia al cursillo prematrimonial (${cursilloValidas().length}).\n\nUn saludo,\n\n${f.nombre || ''}\n${f.cargo || ''}\n${cfg.nombre || ''}`
+    : `Buenos días:\n\nLe adjunto el ${cert.nombre.toLowerCase()}${quien ? ' de ' + quien : ''}.\n\nUn saludo,\n\n${f.nombre || ''}\n${f.cargo || ''}\n${cfg.nombre || ''}`;
   const m = document.createElement('div');
   m.className = 'modal'; m.id = 'correo';
   m.innerHTML = `<div class="caja ancha"><h3 style="margin-top:0">Enviar por correo</h3>
     <div class="rejilla">
-      <div class="campo" style="grid-column:span 7"><label for="m_para">Para</label><input type="email" id="m_para" placeholder="correo@ejemplo.com" value="${esc(estado.registro.email || '')}"></div>
+      <div class="campo" style="grid-column:span 7"><label for="m_para">Para</label><input type="email" id="m_para" placeholder="correo@ejemplo.com" value="${esc(lote ? '' : estado.registro.email || '')}"></div>
       <div class="campo" style="grid-column:span 5"><label for="m_cc">CC (opcional)</label><input type="email" id="m_cc"></div>
       <div class="campo" style="grid-column:1/-1"><label for="m_asunto">Asunto</label><input type="text" id="m_asunto" value="${esc(asunto)}"></div>
       <div class="campo" style="grid-column:1/-1"><label for="m_texto">Mensaje</label><textarea id="m_texto" rows="8">${esc(texto)}</textarea></div>
@@ -1237,6 +1364,30 @@ document.addEventListener('click', async e => {
   if (e.target.closest('summary .resuelto')) { e.stopPropagation(); if (e.target.tagName !== 'INPUT') { e.preventDefault(); e.target.closest('.resuelto').querySelector('input').click(); } return; }
   const t = e.target.closest('button'); if (!t) return;
   if (t.dataset.amonEditar) { editarAmonestacion(t.dataset.amonEditar); return; }
+  if (t.dataset.curPasar) {
+    const c = cursillo(), nuevas = leerParejas(c.pegado);
+    if (!nuevas.length) return;
+    if (t.dataset.curPasar === 'sustituir' && c.parejas.length && !(await confirmar(`¿Sustituir las ${c.parejas.length} parejas de la lista por las ${nuevas.length} pegadas?`, 'Sustituir'))) return;
+    c.parejas = t.dataset.curPasar === 'anadir' ? c.parejas.concat(nuevas) : nuevas;
+    c.pegado = ''; c.paso = 'lista'; guardarCursillo(); render(); window.scrollTo(0, 0); return;
+  }
+  if (t.dataset.curPaso) { cursillo().paso = t.dataset.curPaso; guardarCursillo(); render(); return; }
+  if (t.hasAttribute('data-cur-anadir')) {
+    const c = cursillo(), p = { id: nuevoId(), novio: '', novia: '' };
+    c.parejas.push(p); guardarCursillo(); render();
+    document.querySelector(`[data-cur-pareja="${p.id}"]`)?.focus(); return;
+  }
+  if (t.dataset.curBorrar) {
+    const c = cursillo(); c.parejas = c.parejas.filter(p => p.id !== t.dataset.curBorrar);
+    if (!c.parejas.length) c.paso = 'pegar';
+    guardarCursillo(); render(); return;
+  }
+  if (t.hasAttribute('data-cur-vaciar')) {
+    if (await confirmar('¿Vaciar la lista de parejas del cursillo?', 'Vaciar')) {
+      const c = cursillo(); c.parejas = []; c.paso = 'pegar'; guardarCursillo(); render();
+    }
+    return;
+  }
   if (t.dataset.amonBorrar) {
     if (await confirmar('¿Eliminar esta pareja de las amonestaciones activas?', 'Eliminar')) {
       const a = amonVivas().find(x => x.id === t.dataset.amonBorrar);
@@ -1324,6 +1475,19 @@ function sexoAutomatico() {
 document.addEventListener('input', e => {
   const el = e.target;
   if (el.dataset.tarea) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; return; }
+  if (el.id === 'cur_pegado') {
+    const c = cursillo(); c.pegado = el.value; guardarCursillo();
+    const lista = leerParejas(el.value);
+    $('#cur_detectadas').innerHTML = detectadasHTML(lista);
+    document.querySelectorAll('[data-cur-pasar]').forEach(b => { b.disabled = !lista.length; });
+    return;
+  }
+  if (el.dataset.cur) { cursillo()[el.dataset.cur] = el.value; guardarCursillo(); actualizarPrevia(); return; }
+  if (el.dataset.curPareja) {
+    const p = cursillo().parejas.find(x => x.id === el.dataset.curPareja);
+    if (p) { p[el.dataset.campo] = el.value; guardarCursillo(); actualizarPrevia(); refrescarCursilloBotones(); }
+    return;
+  }
   if (el.dataset.k && cuentaDe(el.dataset.k)) {
     const max = cuentaDe(el.dataset.k).max;
     if (el.value.length > max) el.value = el.value.slice(0, max);

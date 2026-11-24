@@ -19,12 +19,16 @@ const Motor = {
     this.fuentes = {
       normal: await doc.embedFont(PDFLib.StandardFonts.Helvetica),
       negrita: await doc.embedFont(PDFLib.StandardFonts.HelveticaBold),
+      times: await doc.embedFont(PDFLib.StandardFonts.TimesRoman),
+      timesB: await doc.embedFont(PDFLib.StandardFonts.TimesRomanBold),
+      timesBI: await doc.embedFont(PDFLib.StandardFonts.TimesRomanBoldItalic),
     };
   },
 
   // Quita caracteres que la fuente estándar no puede imprimir
-  limpiar(texto, negrita) {
-    const f = negrita ? this.fuentes.negrita : this.fuentes.normal;
+  // fuente: '' (Helvetica, normal o negrita) o 'times' / 'timesB' / 'timesBI' (Times, para el certificado del cursillo)
+  limpiar(texto, negrita, fuente) {
+    const f = this.fuentes[fuente || (negrita ? 'negrita' : 'normal')];
     let s = String(texto ?? '').replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\t/g, ' ');
     try { f.encodeText(s); return s; } catch (e) {
       return [...s].map(c => { try { f.encodeText(c); return c; } catch (e2) { return '?'; } }).join('');
@@ -32,10 +36,11 @@ const Motor = {
   },
 
   // Ancho del texto letra a letra, sin "kerning": así coincide con cómo se dibuja en el PDF
-  _anchos: { normal: new Map(), negrita: new Map() },
-  ancho(texto, tam, negrita) {
-    const f = negrita ? this.fuentes.negrita : this.fuentes.normal;
-    const cache = this._anchos[negrita ? 'negrita' : 'normal'];
+  _anchos: {},
+  ancho(texto, tam, negrita, fuente) {
+    const k = fuente || (negrita ? 'negrita' : 'normal');
+    const f = this.fuentes[k];
+    const cache = this._anchos[k] || (this._anchos[k] = new Map());
     let total = 0;
     for (const c of String(texto)) {
       let w = cache.get(c);
@@ -97,14 +102,14 @@ const Motor = {
   },
 
   // Corta un texto en líneas de un ancho máximo (sin justificar)
-  cortar(texto, tam, ancho, negrita = false) {
+  cortar(texto, tam, ancho, negrita = false, fuente) {
     const lineas = [];
     String(texto ?? '').split('\n').forEach(parrafo => {
       let actual = '';
       parrafo.split(/\s+/).filter(Boolean).forEach(p => {
-        p = this.limpiar(p, negrita);
+        p = this.limpiar(p, negrita, fuente);
         const prueba = actual ? actual + ' ' + p : p;
-        if (actual && this.ancho(prueba, tam, negrita) > ancho) { lineas.push(actual); actual = p; }
+        if (actual && this.ancho(prueba, tam, negrita, fuente) > ancho) { lineas.push(actual); actual = p; }
         else actual = prueba;
       });
       lineas.push(actual);
@@ -143,12 +148,12 @@ const Motor = {
     return { ops, y: y - interlinea }; // y = línea base de la última línea
   },
 
-  texto(t, x, y, tam, { negrita = false, alinear = 'izq', color } = {}) {
-    t = this.limpiar(t, negrita);
-    const w = this.ancho(t, tam, negrita);
+  texto(t, x, y, tam, { negrita = false, alinear = 'izq', color, fuente } = {}) {
+    t = this.limpiar(t, negrita, fuente);
+    const w = this.ancho(t, tam, negrita, fuente);
     if (alinear === 'der') x -= w;
     if (alinear === 'centro') x -= w / 2;
-    return { tipo: 'txt', t, x, y, tam, negrita, color };
+    return fuente ? { tipo: 'txt', t, x, y, tam, negrita, color, fuente } : { tipo: 'txt', t, x, y, tam, negrita, color };
   },
 
   /* Línea suelta con **negritas**, alineada a la izquierda o centrada; opcionalmente subrayada */
@@ -590,12 +595,57 @@ const Motor = {
   },
 
   /* Maqueta completa de un certificado */
+  /* ---------- CERTIFICADOS DEL CURSILLO PREMATRIMONIAL (uno por pareja, A4 apaisado) ---------- */
+  async maquetarCursillo(ctx, conFirma) {
+    const cfg = ctx.config, firmante = ctx.firmante || {}, cur = ctx.cursillo || {};
+    const color = cfg.color || '#a8322d', W = A4.h, CX = W / 2;
+    const parejas = (cur.parejas || []).filter(p => (p.novio || '').trim() || (p.novia || '').trim());
+    const lista = parejas.length ? parejas : [{ novio: '', novia: '' }];
+    const fondo = await this.fondo(1, 'cursillo');
+    const logo = cfg.logo ? await this.encajar(cfg.logo, 84, 70, 104, 104) : null;
+    const sello = conFirma && cfg.sello ? await this.encajar(cfg.sello, CX - 40, 452, 80, 82) : null;
+    const nombre = (cfg.nombre || 'Parroquia').toLocaleUpperCase('es');
+    const lineasNombre = this.cortar(nombre, 30, 400, false, 'times').slice(0, 3);
+    const dias = H.rangoDias(cur.desde, cur.hasta);
+    const paginas = [];
+    for (const p of lista) {
+      const ops = [{ tipo: 'img', src: fondo, x: 0, y: 0, w: W, h: A4.w }];
+      ops.apaisado = true;
+      if (logo) ops.push(logo);
+      let y = lineasNombre.length > 2 ? 104 : lineasNombre.length > 1 ? 112 : 122;
+      lineasNombre.forEach((l, i) => ops.push(this.texto(l, CX, y + i * 31, 30, { fuente: 'times', alinear: 'centro', color })));
+      y += (lineasNombre.length - 1) * 31 + 34;
+      const linea = (t, tam, extra = {}) => ops.push(this.texto(t, CX, y, tam, { fuente: 'times', alinear: 'centro', color, ...extra }));
+      linea('CERTIFICADO CURSILLO PREMATRIMONIAL', 20); y += 34;
+      linea('Han participado en el cursillo de preparación', 18); y += 22;
+      linea('para el sacramento del matrimonio', 18); y += 48;
+      const nombrePareja = (t) => {
+        const tam = Math.max(14, Math.min(24, 24 * 580 / Math.max(1, this.ancho(this.limpiar(t, true, 'timesBI'), 24, true, 'timesBI'))));
+        ops.push(this.texto(t, CX, y, tam, { fuente: 'timesBI', alinear: 'centro', color: '#1a1a1a' }));
+      };
+      nombrePareja(p.novio || ''); y += 36;
+      linea('Y', 20, { fuente: 'timesBI', color: '#1a1a1a' }); y += 36;
+      nombrePareja(p.novia || ''); y += 50;
+      const fin = [...this.cortar(`desarrollado en nuestra parroquia en ${cfg.localidad || '__________'}`, 18, 600, false, 'times'), ...this.cortar(dias, 18, 600, false, 'times')];
+      fin.forEach(l => { linea(l, 18); y += 22; });
+      // Firma
+      const yFdo = 512;
+      if (sello) ops.push(sello);
+      if (conFirma && firmante.firma) { const im = await this.encajar(firmante.firma, 560, yFdo - 100, 180, 96); if (im) { im.y = yFdo + 4 - im.h; ops.push(im); } }
+      ops.push(this.texto('Fdo. ' + (firmante.nombre || '______________________'), 760, yFdo, 14, { fuente: 'times', alinear: 'der', color: '#1a1a1a' }));
+      if (firmante.cargo) ops.push(this.texto(firmante.cargo, 760, yFdo + 16, 14, { fuente: 'times', alinear: 'der', color: '#1a1a1a' }));
+      paginas.push(ops);
+    }
+    return { paginas };
+  },
+
   async maquetar(cert, datos, ctx, conFirma) {
     const cfg = ctx.config;
     const doc = cert.documento(datos, ctx);
     if (doc.formato === 'alegato') return this.maquetarAlegato(datos, ctx);
     if (doc.formato === 'expediente') return this.maquetarExpediente(datos, ctx, ctx.parteExpediente);
     if (doc.formato === 'edicto') return this.maquetarEdicto(ctx, conFirma);
+    if (doc.formato === 'cursillo_lote') return this.maquetarCursillo(ctx, conFirma);
     if (doc.formato === 'registro_civil') return this.maquetarRegistroCivil(datos, ctx, conFirma);
     const color = cfg.color || '#a8322d';
     const IL = doc.interlinea || M.interlinea;
@@ -683,13 +733,17 @@ const Motor = {
   aSVG(ops) {
     const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
     const partes = ops.map(o => {
-      if (o.tipo === 'txt') return `<text x="${o.x.toFixed(2)}" y="${o.y.toFixed(2)}" font-size="${o.tam}"${o.negrita ? ' font-weight="bold"' : ''} fill="${o.color || '#111'}" textLength="${this.ancho(o.t, o.tam, o.negrita).toFixed(2)}" lengthAdjust="spacingAndGlyphs">${esc(o.t)}</text>`;
+      if (o.tipo === 'txt') {
+        const serif = o.fuente ? ` font-family="'Times New Roman', Times, serif"${o.fuente !== 'times' ? ' font-weight="bold"' : ''}${o.fuente === 'timesBI' ? ' font-style="italic"' : ''}` : '';
+        return `<text x="${o.x.toFixed(2)}" y="${o.y.toFixed(2)}" font-size="${o.tam}"${o.negrita && !o.fuente ? ' font-weight="bold"' : ''}${serif} fill="${o.color || '#111'}" textLength="${this.ancho(o.t, o.tam, o.negrita, o.fuente).toFixed(2)}" lengthAdjust="spacingAndGlyphs">${esc(o.t)}</text>`;
+      }
       if (o.tipo === 'linea') return `<line x1="${o.x1}" y1="${o.y1}" x2="${o.x2}" y2="${o.y2}" stroke="${o.color}" stroke-width="${o.grosor}"/>`;
       if (o.tipo === 'rect') return `<rect x="${o.x}" y="${o.y}" width="${o.w}" height="${o.h}" fill="none" stroke="${o.color}" stroke-width="${o.grosor}"/>`;
       if (o.tipo === 'img') return `<image href="${o.src}" x="${o.x}" y="${o.y}" width="${o.w}" height="${o.h}"/>`;
       return '';
     });
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${A4.w} ${A4.h}" font-family="Helvetica, Arial, sans-serif" class="hoja">
+    const [W, Hh] = ops.apaisado ? [A4.h, A4.w] : [A4.w, A4.h];
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${Hh}" font-family="Helvetica, Arial, sans-serif" class="hoja">
       <rect width="100%" height="100%" fill="#fff"/>${partes.join('')}</svg>`;
   },
 
@@ -702,23 +756,26 @@ const Motor = {
     const pdf = await PDFDocument.create();
     pdf.setTitle(titulo || 'Certificado');
     const f = { normal: await pdf.embedFont(StandardFonts.Helvetica), negrita: await pdf.embedFont(StandardFonts.HelveticaBold) };
+    const serif = { times: StandardFonts.TimesRoman, timesB: StandardFonts.TimesRomanBold, timesBI: StandardFonts.TimesRomanBoldItalic };
+    const fuente = async o => o.fuente ? (f[o.fuente] || (f[o.fuente] = await pdf.embedFont(serif[o.fuente]))) : o.negrita ? f.negrita : f.normal;
     const col = hex => {
       const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '#111111');
       return m ? rgb(parseInt(m[1], 16) / 255, parseInt(m[2], 16) / 255, parseInt(m[3], 16) / 255) : rgb(0, 0, 0);
     };
     const cache = new Map();
     for (const ops of this.paginas(resultado)) {
-    const page = pdf.addPage([A4.w, A4.h]);
+    const page = pdf.addPage(ops.apaisado ? [A4.h, A4.w] : [A4.w, A4.h]);
+    const alto = ops.apaisado ? A4.w : A4.h;
     for (const o of ops) {
-      if (o.tipo === 'txt') page.drawText(o.t, { x: o.x, y: A4.h - o.y, size: o.tam, font: o.negrita ? f.negrita : f.normal, color: col(o.color) });
-      else if (o.tipo === 'linea') page.drawLine({ start: { x: o.x1, y: A4.h - o.y1 }, end: { x: o.x2, y: A4.h - o.y2 }, thickness: o.grosor, color: col(o.color) });
-      else if (o.tipo === 'rect') page.drawRectangle({ x: o.x, y: A4.h - o.y - o.h, width: o.w, height: o.h, borderColor: col(o.color), borderWidth: o.grosor });
+      if (o.tipo === 'txt') page.drawText(o.t, { x: o.x, y: alto - o.y, size: o.tam, font: await fuente(o), color: col(o.color) });
+      else if (o.tipo === 'linea') page.drawLine({ start: { x: o.x1, y: alto - o.y1 }, end: { x: o.x2, y: alto - o.y2 }, thickness: o.grosor, color: col(o.color) });
+      else if (o.tipo === 'rect') page.drawRectangle({ x: o.x, y: alto - o.y - o.h, width: o.w, height: o.h, borderColor: col(o.color), borderWidth: o.grosor });
       else if (o.tipo === 'img') {
         if (!cache.has(o.src)) {
           const bytes = Uint8Array.from(atob(o.src.split(',')[1]), c => c.charCodeAt(0));
           cache.set(o.src, o.src.startsWith('data:image/png') ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes));
         }
-        page.drawImage(cache.get(o.src), { x: o.x, y: A4.h - o.y - o.h, width: o.w, height: o.h });
+        page.drawImage(cache.get(o.src), { x: o.x, y: alto - o.y - o.h, width: o.w, height: o.h });
       }
     }
     }

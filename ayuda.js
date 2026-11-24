@@ -52,6 +52,10 @@ const Ayuda = (() => {
       ['El expediente matrimonial', `
         <p>Tiene pestañas: <em>Datos generales, Novio, Novia, Testigo 1, Testigo 2</em> y <em>Última página</em>. En los exámenes, al elegir JURO o PROMETO se abre el primer bloque; al marcar <strong>Resuelto</strong> se pliega y se abre el siguiente.</p>
         <p>Se imprime, guarda o envía <strong>completo o por partes</strong> (desplegable de la derecha). Desde ahí también se abren los demás documentos: Alegato V, exhortos, fe de vida, atestado, registro civil y amonestaciones.</p>`],
+      ['Certificados cursillo: todas las parejas de una vez', `
+        <p>En <strong>Certificados cursillo</strong> copia de tu Excel, Google Sheets o CSV las columnas con los nombres (una pareja por fila) y pégalas. Pon las fechas de inicio y final del cursillo y pulsa <strong>Continuar</strong>.</p>
+        <p>Después verás la lista: puedes corregir nombres, borrar o añadir parejas. Desde ahí se imprimen todos, se guarda un PDF con un certificado por pareja o se envía por mail.</p>
+        <p>Estos nombres se guardan <strong>solo en este navegador</strong>; no se suben a Google Drive.</p>`],
       ['Amonestaciones activas: cómo se acumulan', `
         <p>En la <strong>Última página</strong> del expediente, para el novio y para la novia eliges <em>Amonestaciones aquí</em> o <em>fuera</em> (con la parroquia) y las fechas de inicio y final.</p>
         <p>Cuando alguno de los dos <strong>se amonesta aquí</strong> y tiene fechas, la pareja pasa sola a <strong>Amonestaciones activas</strong>. Así se van <strong>acumulando</strong> todas las parejas que están en amonestaciones a la vez.</p>

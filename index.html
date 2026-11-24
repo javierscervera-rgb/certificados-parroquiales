@@ -271,6 +271,21 @@
   .interruptor.on .int-caja::after { left: 16px; }
   /* Amonestaciones activas */
   .lista-amon { list-style: none; margin: 10px 0; padding: 0; }
+  .cur-pegado { width: 100%; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.5; tab-size: 24; resize: vertical; margin-top: 8px; }
+  .cur-detectadas { margin-top: 10px; font-size: 13px; }
+  .cur-detectadas p { margin: 0 0 4px; }
+  .cur-detectadas ul { margin: 0; padding-left: 18px; color: var(--suave); }
+  .lista-cursillo { list-style: none; margin: 10px 0; padding: 0; counter-reset: cur; }
+  .cur-pareja { display: grid; grid-template-columns: 28px minmax(0,1fr) auto minmax(0,1fr) 36px; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--borde); }
+  .cur-pareja .cur-n { color: var(--suave); font-size: 12px; text-align: right; }
+  .cur-pareja .cur-y { color: var(--suave); font-style: italic; }
+  .cur-pareja input { width: 100%; min-width: 0; }
+  @media (max-width: 640px) {
+    .cur-pareja { grid-template-columns: 22px minmax(0,1fr) 36px; }
+    .cur-pareja .cur-y { display: none; }
+    .cur-pareja input[data-campo="novia"] { grid-column: 2; }
+    .cur-pareja .tarea-borrar { grid-column: 3; grid-row: 1 / span 2; }
+  }
   .amon { display: grid; grid-template-columns: 28px minmax(0, 1fr) 190px auto; gap: 10px; align-items: center; padding: 10px 4px; border-bottom: 1px solid var(--borde); }
   .amon.fuera { opacity: .5; }
   .amon-incluir input { width: 18px; height: 18px; accent-color: var(--azul); }
@@ -379,6 +394,7 @@
   .seccion-exp[data-estado="actual"] { box-shadow: 0 0 0 2px var(--azul) inset; }
   .seccion-exp .campo label { white-space: normal; text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 500; color: var(--tinta); line-height: 1.35; }
   .opciones-dil { max-width: 520px; }
+  .hoja-grande svg[viewBox$=" 595.28"] { width: min(126vh, calc(100vw - 40px)); }
   .grupo-acc select { width: 100%; }
   .otros-docs { gap: 5px; }
   .otros-docs .btn { text-align: left; padding: 8px 10px; font-size: 13px; }

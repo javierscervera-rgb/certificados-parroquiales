@@ -26,6 +26,18 @@ const H = {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
     return m ? `${+m[3]} de ${MESES[+m[2] - 1]} de ${m[1]}` : v;
   },
+  // Días de un cursillo: «el día 5 de mayo de 2026», «los días 5 y 6 de mayo de 2026»,
+  // «los días 5 a 7 de mayo de 2026», «los días 30 de abril a 2 de mayo de 2026»…
+  rangoDias(desde, hasta) {
+    const p = v => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v || ''); return m ? { d: +m[3], m: +m[2], a: +m[1], t: Date.UTC(+m[1], +m[2] - 1, +m[3]) } : null; };
+    let a = p(desde), b = p(hasta);
+    if (!a && !b) return 'los días ____ de __________ de ______';
+    if (!a || !b || a.t === b.t) { const x = a || b; return `el día ${x.d} de ${MESES[x.m - 1]} de ${x.a}`; }
+    if (a.t > b.t) [a, b] = [b, a];
+    if (a.a !== b.a) return `los días ${a.d} de ${MESES[a.m - 1]} de ${a.a} a ${b.d} de ${MESES[b.m - 1]} de ${b.a}`;
+    if (a.m !== b.m) return `los días ${a.d} de ${MESES[a.m - 1]} a ${b.d} de ${MESES[b.m - 1]} de ${b.a}`;
+    return `los días ${a.d} ${b.t - a.t === 864e5 ? 'y' : 'a'} ${b.d} de ${MESES[b.m - 1]} de ${b.a}`;
+  },
   // fecha de cabecera: 1/4/2025
   fechaCorta(v) {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v || '');
@@ -316,6 +328,11 @@ const CERTIFICADOS = [
       ],
       cierre: CIERRE_CERTIFICO, cierreEspacio: 3
     })
+  },
+  {
+    id: 'cursillo_lote', grupo: 'matrimonio', estado: 'listo', formato: 'cursillo_lote',
+    nombre: 'Certificados cursillo', titulo: 'Certificados cursillo prematrimonial',
+    campos: [], documento: () => ({ formato: 'cursillo_lote' })
   },
   {
     id: 'boda', grupo: 'matrimonio', estado: 'listo',
