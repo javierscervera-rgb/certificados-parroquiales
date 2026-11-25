@@ -10,6 +10,7 @@
    Un expediente:
    {
      id, version, llegada, actualizado, estado,
+     para: correo al que la parroquia dirige el expediente (lo ven esa cuenta y a quien ella dé acceso),
      historial: [{ fecha, estado, de }],
      parroquia: { nombre, localidad, email, … },  firmante: { nombre, cargo },  fechaDocumento,
      datos: { clave: valor, … }      ← los mismos campos del registro de Certificados
@@ -121,6 +122,7 @@ var VIC = (function () {
     var d = exp.datos || {};
     return {
       id: exp.id, version: exp.version || 0, llegada: exp.llegada, actualizado: exp.actualizado, estado: exp.estado,
+      para: exp.para || '',
       novio_nombre: d.novio_nombre || '', novio_apellidos: d.novio_apellidos || '',
       novia_nombre: d.novia_nombre || '', novia_apellidos: d.novia_apellidos || '',
       parroquia: (exp.parroquia && exp.parroquia.nombre) || '', localidad: (exp.parroquia && exp.parroquia.localidad) || '',
@@ -211,11 +213,18 @@ var VIC = (function () {
     return errores;
   }
 
+  // Correo válido en minúsculas, o ''
+  function correo(v) {
+    var c = String(v == null ? '' : v).trim().toLowerCase();
+    return /^[^\s@,;<>"]+@[^\s@,;<>"]+\.[a-z]{2,}$/.test(c) && c.length <= 120 ? c : '';
+  }
+
   // Expediente nuevo con lo que manda la parroquia
   function crear(envio, util) {
     var ahora = util.ahora();
     var exp = {
       id: util.id(), version: 1, llegada: ahora, actualizado: ahora, estado: 'pendiente_revision',
+      para: correo(envio.para),
       historial: [{ fecha: ahora, estado: 'pendiente_revision', de: 'parroquia' }],
       parroquia: envio.parroquia || {}, firmante: envio.firmante || {}, fechaDocumento: envio.fechaDocumento || '',
       datos: {}, marcas: {}, resueltas: {},
@@ -232,13 +241,17 @@ var VIC = (function () {
     return copia;
   }
 
-  /* ---------- Servidor ----------
-     Atiende las peticiones de la parroquia y de la Vicaría. Lo usan el Apps Script (con Google Drive)
-     y el modo de prueba (con el almacenamiento del navegador). A = adaptador:
+  /* ---------- Servidor (buzón central) ----------
+     Atiende las peticiones de las parroquias y de las cuentas de la Vicaría. Lo usan el Apps Script
+     (con Google Drive) y el modo de prueba (con el almacenamiento del navegador).
+     - Cada expediente va dirigido a un correo («para»): lo ven esa cuenta de Google (el titular) y las
+       cuentas a las que el titular da acceso. Solo el titular cambia su lista de accesos y sus datos.
+     - Los administradores del buzón (quien lo instaló y los de ADMINS) pueden pedir verlo todo.
+     A = adaptador:
        indice() / guardarIndice(ind)   índice { id: entrada }   ·   leer(id) / guardar(exp)   expediente completo
+       leerAparte(nombre) / guardarAparte(nombre, obj)   'accesos' { titular: [correos] } y 'configuraciones' { titular: datos }
        hash(clave)   ·   bloquear(fn)   ·   emailDe(token): correo de la cuenta de Google ('' si no vale)
-       esAdmin(email)   ·   util { ahora, id }
-       leerConfig() / guardarConfig(c)   datos de la Vicaría para el Alegato V (nombre, vicario, dirección, logo…) */
+       esAdmin(email)   ·   porDefecto(): titular de lo que llega sin destinatario (versiones anteriores)   ·   util { ahora, id } */
   var CAMBIAN_PARROQUIA = ['pendiente_revision', 'devuelto_parroquia'];
   var CLAVES_CONFIG = ['diocesisTitulo', 'vicaria', 'vicario', 'vicarioCargo', 'vicariaCalle', 'vicariaNumero', 'vicariaCP',
     'vicariaCiudad', 'vicariaEmail', 'vicariaTelefono', 'logoDiocesis'];
@@ -265,20 +278,34 @@ var VIC = (function () {
       if (!e || !clave || e.clave !== A.hash(clave)) throw new Error('No se encuentra este expediente en la Vicaría.');
       return e;
     }
-    function admin(p) {
-      var email = A.emailDe(p.token);
-      if (!email || !A.esAdmin(email)) throw new Error('no autorizado');
+    function quien(p) {
+      var email = correo(A.emailDe(p.token));
+      if (!email) throw new Error('no autorizado');
       return email;
     }
+    var accesos = function () { var a = A.leerAparte('accesos'); return a && typeof a === 'object' ? a : {}; };
+    // Titulares cuyos expedientes puede ver este correo: el suyo y los que le han dado acceso
+    function buzones(email, acc) {
+      var r = [email];
+      for (var t in acc) if (t !== email && (acc[t] || []).indexOf(email) >= 0) r.push(t);
+      return r;
+    }
+    var defecto = function () { return correo(A.porDefecto ? A.porDefecto() : ''); };
+    function puedeVer(email, para, acc, todo) { return (todo && A.esAdmin(email)) || buzones(email, acc).indexOf(para || defecto()) >= 0; }
     function guardar(ind, exp, claveHash) {
       A.guardar(exp);
       ind[exp.id] = entrada(exp, claveHash);
       A.guardarIndice(ind);
     }
+    function expedienteVisible(p) {
+      var email = quien(p), ind = A.indice(), e = ind[p.id];
+      if (!e || !puedeVer(email, e.para, accesos(), true)) throw new Error('No tienes acceso a este expediente.');
+      return { email: email, ind: ind, entrada: e };
+    }
     var acciones = {
-      // Parroquia: envía (o vuelve a enviar) el expediente.
+      // Parroquia: envía (o vuelve a enviar) el expediente al correo que elige.
       // La parroquia no manda su sesión de Google (daría acceso a sus archivos de Certificados):
-      // el correo es el de la cuenta con la que está conectada, tal como lo indica ella.
+      // el correo de la parroquia es el de la cuenta con la que está conectada, tal como lo indica ella.
       enviar: function (p) {
         var envio = p.envio || {};
         if (!envio.datos || typeof envio.datos !== 'object') throw new Error('Faltan los datos del expediente.');
@@ -286,6 +313,7 @@ var VIC = (function () {
         if (String(p.clave || '').length < 20) throw new Error('Falta la clave del expediente.');
         envio.parroquia = envio.parroquia && typeof envio.parroquia === 'object' ? envio.parroquia : {};
         for (var x in envio.parroquia) envio.parroquia[x] = texto(envio.parroquia[x]).slice(0, 300);
+        var para = correo(envio.para) || defecto();   // Certificados antiguo: sin destinatario, va al titular del buzón
         return A.bloquear(function () {
           var ind = A.indice(), exp;
           if (p.id && ind[p.id]) {
@@ -294,13 +322,17 @@ var VIC = (function () {
             exp = A.leer(p.id);
             aplicar(exp, [{ op: 'datos', datos: envio.datos }], 'parroquia', A.util);
             exp.parroquia = envio.parroquia; exp.firmante = envio.firmante || exp.firmante; exp.fechaDocumento = envio.fechaDocumento || exp.fechaDocumento;
+            // mientras nadie lo ha revisado, la parroquia puede cambiar a quién va
+            if (para && exp.estado === 'pendiente_revision') exp.para = para;
             exp.historial.push({ fecha: A.util.ahora(), estado: exp.estado, de: 'parroquia', reenvio: true });
             guardar(ind, exp, e.clave);
           } else {
+            if (!para) throw new Error('Indica el correo de la Vicaría al que va el expediente.');
+            envio.para = para;
             exp = crear(envio, A.util);
             guardar(ind, exp, A.hash(p.clave));
           }
-          return { id: exp.id, estado: exp.estado, version: exp.version, llegada: exp.llegada };
+          return { id: exp.id, estado: exp.estado, version: exp.version, llegada: exp.llegada, para: exp.para };
         });
       },
       // Parroquia: estado de sus expedientes
@@ -308,7 +340,7 @@ var VIC = (function () {
         var ind = A.indice(), r = {};
         (p.lista || []).slice(0, 500).forEach(function (x) {
           var e = ind[x.id];
-          if (e && x.clave && e.clave === A.hash(x.clave)) r[x.id] = { estado: e.estado, version: e.version, actualizado: e.actualizado, pendientes: e.pendientesParroquia || 0, aprobado: !!e.aprobado };
+          if (e && x.clave && e.clave === A.hash(x.clave)) r[x.id] = { estado: e.estado, version: e.version, actualizado: e.actualizado, pendientes: e.pendientesParroquia || 0, aprobado: !!e.aprobado, para: e.para || '' };
           else if (x.id) r[x.id] = { estado: 'desconocido' };
         });
         return { estados: r };
@@ -332,44 +364,48 @@ var VIC = (function () {
           return { expediente: paraParroquia(exp), errores: errores };
         });
       },
-      // Vicaría
+      // Vicaría: cualquiera puede entrar con su cuenta de Google; solo ve lo que va a su correo
+      // (o a quien le ha dado acceso)
       quien: function (p) {
-        var email = A.emailDe(p.token);
-        return { email: email, admin: !!(email && A.esAdmin(email)) };
+        var email = correo(A.emailDe(p.token));
+        if (!email) return { email: '', admin: false };
+        var acc = accesos();
+        return { email: email, admin: !!A.esAdmin(email), buzones: buzones(email, acc), accesos: acc[email] || [] };
       },
       listar: function (p) {
-        admin(p);
-        var ind = A.indice(), lista = [];
-        for (var id in ind) lista.push(publica(ind[id]));
-        return { lista: lista };
+        var email = quien(p), acc = accesos(), todo = !!p.todo && A.esAdmin(email), ind = A.indice(), lista = [];
+        for (var id in ind) if (puedeVer(email, ind[id].para, acc, todo)) lista.push(publica(ind[id]));
+        return { lista: lista, buzones: buzones(email, acc) };
       },
       expediente: function (p) {
-        admin(p);
-        var exp = A.leer(p.id);
+        var v = expedienteVisible(p), exp = A.leer(p.id);
         if (!exp) throw new Error('No existe ese expediente.');
-        return { expediente: exp };
-      },
-      // Datos de la Vicaría (comunes a todas sus cuentas)
-      configuracion: function (p) {
-        admin(p);
-        return { config: limpiarConfig(A.leerConfig() || {}) };
-      },
-      guardarConfig: function (p) {
-        admin(p);
-        var c = limpiarConfig(p.config);
-        A.bloquear(function () { A.guardarConfig(c); });
-        return { config: c };
+        var cfgs = A.leerAparte('configuraciones') || {};
+        return { expediente: exp, config: limpiarConfig(cfgs[exp.para || defecto()] || {}) };
       },
       ops: function (p) {
-        admin(p);
         return A.bloquear(function () {
-          var ind = A.indice(), e = ind[p.id];
-          if (!e) throw new Error('No existe ese expediente.');
-          var exp = A.leer(p.id);
+          var v = expedienteVisible(p), exp = A.leer(p.id);
           var errores = aplicar(exp, p.ops || [], 'vicaria', A.util);
-          guardar(ind, exp, e.clave);
+          guardar(v.ind, exp, v.entrada.clave);
           return { expediente: exp, errores: errores };
         });
+      },
+      // Datos de la Vicaría (Alegato V) y lista de accesos: los del titular que entra
+      configuracion: function (p) {
+        var email = quien(p), cfgs = A.leerAparte('configuraciones') || {}, acc = accesos();
+        return { config: limpiarConfig(cfgs[email] || {}), accesos: acc[email] || [], buzones: buzones(email, acc) };
+      },
+      guardarConfig: function (p) {
+        var email = quien(p), c = limpiarConfig(p.config);
+        A.bloquear(function () { var cfgs = A.leerAparte('configuraciones') || {}; cfgs[email] = c; A.guardarAparte('configuraciones', cfgs); });
+        return { config: c };
+      },
+      guardarAccesos: function (p) {
+        var email = quien(p), lista = [];
+        (p.lista || []).forEach(function (x) { var c = correo(x); if (c && c !== email && lista.indexOf(c) < 0 && lista.length < 50) lista.push(c); });
+        A.bloquear(function () { var acc = accesos(); if (lista.length) acc[email] = lista; else delete acc[email]; A.guardarAparte('accesos', acc); });
+        return { accesos: lista };
       },
     };
     return function atender(p) {
@@ -386,7 +422,7 @@ var VIC = (function () {
     marcas: marcas, notas: notas, cambio: cambio, valor: valor, datosEfectivos: datosEfectivos,
     hiloPendiente: hiloPendiente, resuelto: resuelto, pendientesParroquia: pendientesParroquia, avisosVicaria: avisosVicaria,
     titulo: titulo, resumen: resumen, aplicar: aplicar, crear: crear, paraParroquia: paraParroquia, servidor: servidor,
-    CLAVES_CONFIG: CLAVES_CONFIG, limpiarConfig: limpiarConfig,
+    CLAVES_CONFIG: CLAVES_CONFIG, limpiarConfig: limpiarConfig, correo: correo,
   };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = VIC;
