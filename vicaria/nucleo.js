@@ -237,8 +237,20 @@ var VIC = (function () {
      y el modo de prueba (con el almacenamiento del navegador). A = adaptador:
        indice() / guardarIndice(ind)   índice { id: entrada }   ·   leer(id) / guardar(exp)   expediente completo
        hash(clave)   ·   bloquear(fn)   ·   emailDe(token): correo de la cuenta de Google ('' si no vale)
-       esAdmin(email)   ·   util { ahora, id } */
+       esAdmin(email)   ·   util { ahora, id }
+       leerConfig() / guardarConfig(c)   datos de la Vicaría para el Alegato V (nombre, vicario, dirección, logo…) */
   var CAMBIAN_PARROQUIA = ['pendiente_revision', 'devuelto_parroquia'];
+  var CLAVES_CONFIG = ['diocesisTitulo', 'vicaria', 'vicario', 'vicarioCargo', 'vicariaCalle', 'vicariaNumero', 'vicariaCP',
+    'vicariaCiudad', 'vicariaEmail', 'vicariaTelefono', 'logoDiocesis'];
+  function limpiarConfig(c) {
+    var r = {};
+    CLAVES_CONFIG.forEach(function (k) {
+      var v = c && c[k] != null ? String(c[k]) : '';
+      if (k === 'logoDiocesis') r[k] = /^data:image\/(png|jpeg);base64,[a-z0-9+\/=]+$/i.test(v) && v.length < 600000 ? v : '';
+      else r[k] = v.slice(0, 300);
+    });
+    return r;
+  }
   function servidor(A) {
     function entrada(exp, claveHash) {
       var r = resumen(exp);
@@ -337,6 +349,17 @@ var VIC = (function () {
         if (!exp) throw new Error('No existe ese expediente.');
         return { expediente: exp };
       },
+      // Datos de la Vicaría (comunes a todas sus cuentas)
+      configuracion: function (p) {
+        admin(p);
+        return { config: limpiarConfig(A.leerConfig() || {}) };
+      },
+      guardarConfig: function (p) {
+        admin(p);
+        var c = limpiarConfig(p.config);
+        A.bloquear(function () { A.guardarConfig(c); });
+        return { config: c };
+      },
       ops: function (p) {
         admin(p);
         return A.bloquear(function () {
@@ -363,6 +386,7 @@ var VIC = (function () {
     marcas: marcas, notas: notas, cambio: cambio, valor: valor, datosEfectivos: datosEfectivos,
     hiloPendiente: hiloPendiente, resuelto: resuelto, pendientesParroquia: pendientesParroquia, avisosVicaria: avisosVicaria,
     titulo: titulo, resumen: resumen, aplicar: aplicar, crear: crear, paraParroquia: paraParroquia, servidor: servidor,
+    CLAVES_CONFIG: CLAVES_CONFIG, limpiarConfig: limpiarConfig,
   };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = VIC;

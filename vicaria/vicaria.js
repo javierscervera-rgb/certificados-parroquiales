@@ -25,6 +25,7 @@ const V = {
   exp: null, errorExp: '', pestana: 'datos',
   spread: 0, paginas: null, girando: false,
   cola: [], enviando: false, estadoGuardado: '',
+  config: null, configLocal: false,   // datos de la Vicaría (Alegato V); configLocal: el buzón aún no sabe guardarlos
 };
 
 function aviso(msg, ms = 3600) {
@@ -103,6 +104,7 @@ function cabecera(titulo, sub = '') {
     <div class="marca"><button class="marca-inicio" data-ir="#/" title="Ir a la lista de expedientes"><span class="parroquia">Expedientes Vicaría <em class="beta">beta</em></span></button><h1>${titulo}</h1>${sub}</div>
     <div class="cab-der">${g ? `<span class="chip ${g === 'error' ? 'aviso' : ''}" id="guardado">${g === 'guardando' ? 'Guardando…' : g === 'error' ? 'No se pudo guardar · reintentando' : '✓ Guardado'}</span>` : ''}
       <button class="modo" type="button" data-acc="modo" title="Modo día / noche" aria-label="Cambiar entre modo día y modo noche"><svg class="luna" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><svg class="sol" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+      ${sesionLista() ? `<button class="btn-cab" data-ir="#/datos" title="Nombre, vicario, dirección y logo para el Alegato V">⚙ Datos de la Vicaría</button>` : ''}
       ${quien}</div>
   </header>`;
 }
@@ -230,8 +232,10 @@ function campoDet(c, lado) {
 }
 function vistaDetalle() {
   const est = VIC_CAMPOS.estructura(), pest = V.pestana;
-  const cuenta = p => est[p].flatMap(b => VIC_CAMPOS.campos(b)).filter(c => VIC.marcas(V.exp, c.k).length).length;
-  const avisa = p => est[p].flatMap(b => VIC_CAMPOS.campos(b)).some(c => VIC.hiloPendiente(V.exp, c.k, 'vicaria'));
+  const cuenta = p => (est[p] || []).flatMap(b => VIC_CAMPOS.campos(b)).filter(c => VIC.marcas(V.exp, c.k).length).length;
+  const avisa = p => (est[p] || []).flatMap(b => VIC_CAMPOS.campos(b)).some(c => VIC.hiloPendiente(V.exp, c.k, 'vicaria'));
+  const pestanas = `<div class="pestanas vc-pestanas">${VIC_CAMPOS.PESTANAS.map(p => `<button class="${p.id === pest ? 'on' : ''}" data-pestana="${p.id}">${esc(p.nombre)}${cuenta(p.id) ? `<span class="vc-n${avisa(p.id) ? ' rojo' : ''}">${cuenta(p.id)}</span>` : ''}</button>`).join('')}</div>`;
+  if (pest === 'alegato') return `${cabecera('Detalle del expediente')}<main class="vc-main-ancho">${cabExpediente()}${pestanas}${vistaAlegato()}</main>`;
   const bloques = est[pest].map(b => {
     if (b.pareja) return `<div class="vc-pareja">${b.pareja.map((col, i) => `<div class="vc-col"><h4>${esc(col.titulo)}</h4><div class="rejilla">${col.campos.map(c => campoDet(c, i ? 'der' : 'izq')).join('')}</div></div>`).join('')}</div>`;
     return `<div class="vc-bloque" ${b.color ? `style="--color:${b.color}"` : ''}>${b.titulo ? `<h4>${esc(b.titulo)}</h4>` : ''}<div class="rejilla">${b.campos.map(c => campoDet(c, 'der')).join('')}</div></div>`;
@@ -243,7 +247,7 @@ function vistaDetalle() {
   return `${cabecera('Detalle del expediente')}
   <main class="vc-main-ancho">
     ${cabExpediente()}
-    <div class="pestanas vc-pestanas">${VIC_CAMPOS.PESTANAS.map(p => `<button class="${p.id === pest ? 'on' : ''}" data-pestana="${p.id}">${esc(p.nombre)}${cuenta(p.id) ? `<span class="vc-n${avisa(p.id) ? ' rojo' : ''}">${cuenta(p.id)}</span>` : ''}</button>`).join('')}</div>
+    ${pestanas}
     <div class="vc-hoja" id="hoja">
       <div class="vc-margen izq"></div>
       <div class="vc-doc">${pest === 'vicaria' ? '<p class="nota" style="margin:0 0 12px">Parte inferior de la última página del expediente. Se guarda sola y sale en el impreso (vista Revisión e Imprimir expediente).</p>' : ''}${bloques}</div>
@@ -286,6 +290,165 @@ function colocarNotas() {
     if (abajo > hoja.offsetHeight) hoja.style.minHeight = abajo + 'px';
   });
   lineas.innerHTML = svg;
+}
+
+/* ---------------- ALEGATO V ----------------
+   Los mismos campos y el mismo modelo que «Alegato V» en Certificados (plantillas.js, motor.js).
+   Cada dato sale del expediente (con sus rectificaciones). Lo que se cambia aquí se guarda solo para
+   el Alegato (datos.vic_alegato = { clave: valor }): el expediente de la parroquia no se toca. */
+const hoyISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+function camposAlegato() {
+  const cert = CERTIFICADOS.find(c => c.id === 'alegato');
+  const lado = l => (cert.camposPareja || []).filter(f => !f.solo || f.solo === l).map(f => ({ ...f, k: f.clave ? f.clave(l) : `${l}_${f.k}` }));
+  return {
+    pareja: [{ titulo: 'El contrayente', campos: lado('novio') }, { titulo: 'La contrayente', campos: lado('novia') }],
+    campos: [...cert.campos, { k: 'fecha', label: 'Fecha del Alegato (año del libro y edad)', tipo: 'date', w: 6 }],
+  };
+}
+function alGuardados() { try { const o = JSON.parse(V.exp.datos.vic_alegato || '{}'); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; } }
+// lo guardado + lo que se está escribiendo (V.alProv, aún sin guardar)
+const alPropios = () => Object.assign(alGuardados(), V.alProv || {});
+const alBase = k => (k === 'fecha' ? hoyISO() : VIC.valor(V.exp, k));
+const alValor = k => { const o = alPropios(); return k in o ? String(o[k]) : alBase(k); };
+function alDatos() {
+  const d = VIC.datosEfectivos(V.exp), o = alPropios();
+  Object.keys(o).forEach(k => { if (k !== 'fecha') d[k] = String(o[k]); });
+  ['novio', 'novia'].forEach(l => { d[l + '_apellidos'] = [d[l + '_apellido1'], d[l + '_apellido2']].filter(x => x && String(x).trim()).join(' ') || d[l + '_apellidos'] || ''; });
+  return d;
+}
+// Datos de la Vicaría: los guardados, y si faltan, los habituales
+function configVicaria() {
+  const c = V.config || {}, r = { diocesisTitulo: 'Arzobispado de Madrid', vicarioCargo: 'Vicario Episcopal', vicaria: (V.exp && V.exp.parroquia && V.exp.parroquia.vicaria) || '' };
+  Object.keys(c).forEach(k => { if (c[k]) r[k] = c[k]; });
+  return r;
+}
+const ctxAlegato = () => ({ config: { ...configVicaria(), nombre: (V.exp.parroquia && V.exp.parroquia.nombre) || '' }, fechaDocumento: alValor('fecha') || hoyISO() });
+function campoAlegato(c) {
+  const k = c.k, v = alValor(k), o = alPropios(), cambiado = k in o && String(o[k]) !== alBase(k) && k !== 'fecha';
+  const id = 'al_' + k, tipo = c.tipo === 'date' ? 'date' : c.tipo === 'tel' ? 'tel' : 'text';
+  return `<div class="campo vc-al-campo${cambiado ? ' cambiado' : ''}" style="grid-column:span ${c.w || 6}" data-al-caja="${k}">
+    <label for="${id}">${esc(c.label)}</label><input id="${id}" data-al="${k}" type="${tipo}" value="${esc(v)}" placeholder="${esc(c.ph || '')}" autocomplete="off">
+    ${cambiado ? `<div class="vc-al-orig">Solo en el Alegato · en el expediente: <span>${esc(ver(k, alBase(k))) || '(vacío)'}</span> <button type="button" class="btn enlace" data-al-quitar="${k}">Restablecer</button></div>` : ''}</div>`;
+}
+function vistaAlegato() {
+  const A = camposAlegato(), cfg = configVicaria(), aprobado = VIC.fueAprobado(V.exp) || VIC.APROBADOS.includes(V.exp.estado);
+  const faltan = ['vicaria', 'vicario', 'vicariaCiudad'].filter(k => !cfg[k]);
+  return `<div class="vc-alegato">
+    <div class="vc-doc">
+      <p class="nota" style="margin:0 0 12px">Los datos salen del expediente, con sus rectificaciones. Lo que cambies aquí <strong>solo cambia el Alegato V</strong>; el expediente de la parroquia no se toca.</p>
+      ${aprobado ? '' : '<p class="vc-aviso-naranja">El expediente aún no está aprobado.</p>'}
+      ${faltan.length ? `<p class="vc-aviso-naranja">Faltan datos de la Vicaría (${faltan.map(k => ({ vicaria: 'nombre de la vicaría', vicario: 'vicario', vicariaCiudad: 'ciudad' })[k]).join(', ')}). <a href="#/datos">Rellénalos aquí</a>: valen para todos los Alegatos.</p>` : ''}
+      <div class="vc-pareja vc-al-pareja">${A.pareja.map(col => `<div class="vc-col"><h4>${esc(col.titulo)}</h4><div class="rejilla">${col.campos.map(campoAlegato).join('')}</div></div>`).join('')}</div>
+      <div class="vc-bloque"><h4>Alegato</h4><div class="rejilla">${A.campos.map(campoAlegato).join('')}</div></div>
+    </div>
+    <aside class="vc-al-lado">
+      <button class="btn prim grande" data-acc="imprimir-alegato">${ICO.imprimir}Imprimir Alegato V</button>
+      <div class="vc-al-previa" id="alPrevia"><div class="vc-cargando">Preparando…</div></div>
+      <p class="nota">Pulsa una página para verla en grande.</p>
+    </aside>
+  </div>`;
+}
+let _alPend = null, _alSVG = [];
+function previaAlegato() {
+  clearTimeout(_alPend);
+  _alPend = setTimeout(async () => {
+    const caja = $('#alPrevia'); if (!caja || !V.exp) return;
+    try {
+      const res = await Motor.maquetarAlegato(alDatos(), ctxAlegato());
+      _alSVG = Motor.paginas(res).map(p => Motor.aSVG(p));
+      caja.innerHTML = _alSVG.map((s, i) => `<button type="button" class="vc-al-pag" data-acc="ampliar-alegato" title="Página ${i + 1}: pulsa para ampliar">${s}</button>`).join('');
+    } catch (e) { console.error(e); caja.innerHTML = '<p class="vc-error">No se pudo preparar la vista previa.</p>'; }
+  }, 120);
+}
+function ampliarAlegato() {
+  const m = document.createElement('div');
+  m.className = 'modal ampliada';
+  m.innerHTML = `<div class="hoja-grande">${_alSVG.join('')}</div><button class="cerrar" aria-label="Cerrar">✕</button>`;
+  m.addEventListener('click', e => { if (e.target === m || e.target.closest('.cerrar')) m.remove(); });
+  document.body.appendChild(m);
+}
+// Guarda lo propio del Alegato: si un dato vuelve a ser igual que en el expediente, deja de ser propio
+function guardarAlegato(k, v, repintar) {
+  if (V.alProv) delete V.alProv[k];
+  const o = alPropios();
+  if (v === alBase(k) && k !== 'fecha') delete o[k]; else o[k] = v;
+  const json = Object.keys(o).length ? JSON.stringify(o) : '';
+  if (json === (V.exp.datos.vic_alegato || '')) return;
+  cambiar([{ op: 'vic', k: 'vic_alegato', v: json }], repintar);
+}
+function repintarCampoAlegato(k) {
+  const caja = document.querySelector(`[data-al-caja="${k}"]`); if (!caja) return;
+  const c = [...camposAlegato().pareja.flatMap(x => x.campos), ...camposAlegato().campos].find(x => x.k === k);
+  const t = document.createElement('div'); t.innerHTML = campoAlegato(c); caja.replaceWith(t.firstElementChild);
+}
+
+/* ---------------- DATOS DE LA VICARÍA (para el Alegato V) ---------------- */
+async function cargarConfig() {
+  try { V.config = await VicariaServicio.configuracion(token()); V.configLocal = false; }
+  catch (e) {
+    if (errorDeSesion(e)) return;
+    // buzón instalado antes de existir esta opción: se guardan en este navegador hasta que se actualice
+    V.config = leer('config', {}); V.configLocal = true;
+  }
+  if (V.vista === 'datos') pintar();
+  else if (V.vista === 'detalle' && V.pestana === 'alegato') previaAlegato();
+}
+function vistaDatos() {
+  const c = V.config;
+  if (!c) return `${cabecera('Datos de la Vicaría')}<main><div class="tarjeta vc-cargando">Cargando…</div></main>`;
+  const inp = (k, label, w = 12, ph = '') => `<div class="campo" style="grid-column:span ${w}"><label for="cfg_${k}">${label}</label><input type="text" id="cfg_${k}" data-cfg="${k}" value="${esc(c[k] || '')}" placeholder="${esc(ph)}" autocomplete="off"></div>`;
+  return `${cabecera('Datos de la Vicaría')}
+  <main><div class="tarjeta vc-datos">
+    <p class="nota" style="margin:0 0 14px">Salen en el <strong>Alegato V</strong> de todos los expedientes (los mismos datos que en Certificados → Datos de la parroquia → Vicaría).</p>
+    ${V.configLocal ? '<p class="vc-aviso-naranja">El buzón de la Vicaría es de una versión anterior: estos datos se guardan solo en este navegador hasta que se actualice (vicaria/README.md).</p>' : ''}
+    <div class="rejilla">
+      ${inp('diocesisTitulo', 'Arzobispado / Obispado', 12, 'Arzobispado de Madrid')}
+      ${inp('vicaria', 'Nombre de la vicaría', 6, 'Vicaría I Norte')}${inp('vicario', 'Nombre del vicario', 6)}
+      ${inp('vicarioCargo', 'Cargo del vicario', 6, 'Vicario Episcopal')}${inp('vicariaTelefono', 'Teléfono', 6)}
+      ${inp('vicariaCalle', 'Calle', 9)}${inp('vicariaNumero', 'Nº', 3)}
+      ${inp('vicariaCP', 'C.P.', 3)}${inp('vicariaCiudad', 'Ciudad (para «Dado en …»)', 9)}
+      ${inp('vicariaEmail', 'Email', 12)}
+      <div class="campo" style="grid-column:1/-1"><label>Logo de la diócesis (arriba a la izquierda del Alegato V)</label>
+        <div class="imgbox"><div class="vista">${c.logoDiocesis ? `<img src="${c.logoDiocesis}" alt="">` : 'sin imagen'}</div>
+          <div class="imgbox-txt"><label class="btn archivo"><input type="file" accept="image/*" data-logo>Elegir imagen…</label>${c.logoDiocesis ? '<button class="btn" data-acc="quitar-logo">Quitar</button>' : ''}<div class="nota">PNG o JPG.</div></div></div></div>
+    </div>
+    <div class="fila" style="justify-content:flex-end;margin-top:16px"><button class="btn" data-acc="volver">Volver</button><button class="btn prim" data-acc="guardar-config">Guardar</button></div>
+  </div></main>`;
+}
+function leerFormConfig() {
+  const c = { ...(V.config || {}) };
+  document.querySelectorAll('[data-cfg]').forEach(el => { c[el.dataset.cfg] = el.value.trim(); });
+  return c;
+}
+async function guardarConfigVicaria(b) {
+  const c = leerFormConfig();
+  b.disabled = true;
+  try {
+    if (V.configLocal) { V.config = VIC.limpiarConfig(c); guardar('config', V.config); }
+    else V.config = await VicariaServicio.guardarConfig(token(), c);
+    aviso('Datos de la Vicaría guardados.');
+    history.length > 1 ? history.back() : (location.hash = '#/');
+  } catch (e) { if (!errorDeSesion(e)) aviso('No se pudieron guardar: ' + e.message, 6000); }
+  b.disabled = false;
+}
+// Imagen subida → PNG/JPEG de 700 px como mucho (como en Certificados)
+function leerImagen(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const im = new Image();
+      im.onload = () => {
+        const k = Math.min(1, 700 / Math.max(im.width, im.height)), cv = document.createElement('canvas');
+        cv.width = Math.round(im.width * k); cv.height = Math.round(im.height * k);
+        const g = cv.getContext('2d'); g.drawImage(im, 0, 0, cv.width, cv.height);
+        const px = g.getImageData(0, 0, cv.width, cv.height).data;
+        let transparente = false; for (let i = 3; i < px.length; i += 16) if (px[i] < 250) { transparente = true; break; }
+        res(transparente ? cv.toDataURL('image/png') : cv.toDataURL('image/jpeg', 0.88));
+      };
+      im.onerror = rej; im.src = r.result;
+    };
+    r.onerror = rej; r.readAsDataURL(file);
+  });
 }
 
 /* ---------------- REVISIÓN: el impreso como un libro ---------------- */
@@ -548,11 +711,11 @@ async function cambiarEstado(acc) {
 }
 
 /* ---------------- IMPRIMIR ---------------- */
-async function imprimir(b) {
+async function imprimir(b, alegato) {
   b.disabled = true;
   try {
-    const res = await Motor.maquetarExpediente(VIC.datosEfectivos(V.exp), ctxImpreso(false), 'todo');
-    const bytes = await Motor.aPDF(res, 'Expediente matrimonial - ' + VIC.titulo(V.exp));
+    const res = alegato ? await Motor.maquetarAlegato(alDatos(), ctxAlegato()) : await Motor.maquetarExpediente(VIC.datosEfectivos(V.exp), ctxImpreso(false), 'todo');
+    const bytes = await Motor.aPDF(res, (alegato ? 'Alegato V - ' : 'Expediente matrimonial - ') + VIC.titulo(V.exp));
     document.getElementById('marcoImpresion')?.remove();
     const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
     const marco = document.createElement('iframe');
@@ -585,10 +748,12 @@ function ir() {
   cerrarPop();
   const m = /^#\/(e|r)\/([\w-]+)/.exec(location.hash);
   if (!sesionLista()) { V.vista = 'entrada'; pintar(); return; }
+  if (!V.config && !V._cargandoConfig) { V._cargandoConfig = true; cargarConfig().finally(() => { V._cargandoConfig = false; }); }
+  if (location.hash === '#/datos') { V.vista = 'datos'; pintar(); window.scrollTo(0, 0); return; }
   if (!m) { V.vista = 'general'; V.id = null; pintar(); cargarLista(); return; }
   const nueva = m[2] !== V.id;
   V.vista = m[1] === 'e' ? 'detalle' : 'revision'; V.id = m[2];
-  if (nueva) { V.exp = null; V.paginas = null; V.spread = 0; V.pestana = 'datos'; V.errorExp = ''; }
+  if (nueva) { V.exp = null; V.paginas = null; V.spread = 0; V.pestana = 'datos'; V.errorExp = ''; V.alProv = {}; }
   pintar(); window.scrollTo(0, 0);
   if (!V.exp) cargarExp(V.id);
   else if (V.vista === 'revision') prepararPaginas().then(() => { if (V.vista === 'revision') { pintar(); } });
@@ -597,8 +762,9 @@ function pintar() {
   const app = $('#app');
   if (V.vista === 'entrada') app.innerHTML = vistaEntrada();
   else if (V.vista === 'general') app.innerHTML = vistaGeneral();
+  else if (V.vista === 'datos') app.innerHTML = vistaDatos();
   else if (!V.exp) app.innerHTML = `${cabecera('Expediente')}<main><div class="tarjeta vc-cargando">${V.errorExp ? `<p class="vc-error">${esc(V.errorExp)}</p><a class="btn" href="#/">Volver a la lista</a>` : 'Abriendo el expediente…'}</div></main>`;
-  else if (V.vista === 'detalle') { app.innerHTML = vistaDetalle(); requestAnimationFrame(colocarNotas); }
+  else if (V.vista === 'detalle') { app.innerHTML = vistaDetalle(); if (V.pestana === 'alegato') previaAlegato(); else requestAnimationFrame(colocarNotas); }
   else { app.innerHTML = vistaRevision(); if (V.paginas) pintarLibro(); else prepararPaginas().then(() => { if (V.vista === 'revision') pintarLibro(); }); }
 }
 
@@ -611,6 +777,7 @@ document.addEventListener('click', async e => {
   const ord = t.closest('[data-orden]');
   if (ord) { const por = ord.dataset.orden; V.orden = { por, inv: V.orden.por === por ? !V.orden.inv : false }; guardar('orden', V.orden); pintar(); return; }
   const pes = t.closest('[data-pestana]'); if (pes) { V.pestana = pes.dataset.pestana; pintar(); return; }
+  const quitar = t.closest('[data-al-quitar]'); if (quitar) { guardarAlegato(quitar.dataset.alQuitar, alBase(quitar.dataset.alQuitar), true); return; }
   // pulsar un dato (detalle), una nota del margen o un dato del impreso (revisión)
   const icono = t.closest('.vc-icono'), zona = t.closest('.vc-zona'), campo = t.closest('.vc-campo[data-k]'), nota = t.closest('[data-nota]');
   if (icono || zona) { if (!V.girando) abrirPop((icono || zona).dataset.k.split(' '), icono || zona); return; }
@@ -626,6 +793,11 @@ document.addEventListener('click', async e => {
   else if (a === 'actualizar') { V.lista = null; pintar(); cargarLista(); }
   else if (a === 'archivados') { V.archivados = !V.archivados; pintar(); }
   else if (a === 'imprimir') imprimir(b);
+  else if (a === 'imprimir-alegato') imprimir(b, true);
+  else if (a === 'ampliar-alegato') ampliarAlegato();
+  else if (a === 'guardar-config') guardarConfigVicaria(b);
+  else if (a === 'quitar-logo') { V.config = { ...leerFormConfig(), logoDiocesis: '' }; pintar(); }
+  else if (a === 'volver') history.length > 1 ? history.back() : (location.hash = '#/');
   else if (a === 'anterior') pasar(-1);
   else if (a === 'siguiente') pasar(1);
   else if (a === 'pantalla') pantallaCompleta();
@@ -644,10 +816,23 @@ document.addEventListener('keydown', e => {
   }
   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && _pop) { const p = _pop.querySelector('.vc-pop-acc .prim'); if (p) p.click(); }
 });
-// Campos de la pestaña «Vicaría»: se guardan al salir de cada uno
-document.addEventListener('change', e => {
-  const el = e.target; if (!el.dataset || !el.dataset.vic || !V.exp) return;
-  if (el.value !== (V.exp.datos[el.dataset.vic] || '')) cambiar([{ op: 'vic', k: el.dataset.vic, v: el.value }], false);
+// Campos de las pestañas «Vicaría» y «Alegato V»: se guardan al salir de cada uno
+document.addEventListener('change', async e => {
+  const el = e.target; if (!el.dataset) return;
+  if (el.dataset.logo !== undefined) {
+    const f = el.files && el.files[0]; if (!f) return;
+    try { V.config = { ...leerFormConfig(), logoDiocesis: await leerImagen(f) }; pintar(); } catch (x) { aviso('No se pudo leer la imagen.'); }
+    return;
+  }
+  if (!V.exp) return;
+  if (el.dataset.vic) { if (el.value !== (V.exp.datos[el.dataset.vic] || '')) cambiar([{ op: 'vic', k: el.dataset.vic, v: el.value }], false); return; }
+  if (el.dataset.al) { guardarAlegato(el.dataset.al, el.value, false); repintarCampoAlegato(el.dataset.al); previaAlegato(); }
+});
+// Mientras se escribe en el Alegato, la vista previa se actualiza sola
+document.addEventListener('input', e => {
+  const el = e.target; if (!el.dataset || !el.dataset.al || !V.exp) return;
+  (V.alProv = V.alProv || {})[el.dataset.al] = el.value;   // provisional: al salir del campo se guarda de verdad
+  previaAlegato();
 });
 window.addEventListener('resize', () => { if (V.vista === 'detalle') colocarNotas(); if (V.vista === 'revision') medirLibro(); cerrarPop(); });
 window.addEventListener('hashchange', ir);
