@@ -183,6 +183,19 @@ function vistaGeneral() {
 /* ---------------- DETALLE Y REVISIÓN: parte común ---------------- */
 const etiqueta = k => VIC_CAMPOS.etiqueta(k);
 const ver = (k, v) => VIC_CAMPOS.mostrar(k, v);
+// Firmas y sello que ha mandado la parroquia (las de novios y testigos se firman a distancia en Certificados)
+const esImagen = v => /^data:image\/(png|jpe?g);base64,/.test(String(v || ''));
+function firmasRecibidas(e) {
+  const d = e.datos || {}, f = e.firmante || {};
+  const lista = [
+    ['Novio', esImagen(d.fd_novio)], ['Novia', esImagen(d.fd_novia)], ['Testigo 1', esImagen(d.fd_t1)], ['Testigo 2', esImagen(d.fd_t2)],
+    [f.nombre ? `Firmante (${f.nombre})` : 'Firmante', esImagen(f.firma)], ['Sello de la parroquia', esImagen(e.sello)],
+  ];
+  const faltan = lista.filter(x => !x[1]).length;
+  return `<div class="vc-firmas" title="Firmas recibidas de la parroquia: salen en la vista Revisión y al imprimir el expediente">
+    <span>Firmas</span>${lista.map(([n, ok]) => `<span class="vc-firma ${ok ? 'ok' : 'falta'}">${ok ? '✓' : '✗'} ${esc(n)}</span>`).join('')}
+    ${faltan ? '<small>Lo que falta no ha llegado: la parroquia puede pedir las firmas a distancia o subir firma y sello en Certificados y volver a enviar.</small>' : ''}</div>`;
+}
 function cabExpediente() {
   const e = V.exp, est = e.estado;
   const btn = (acc, ico, txt, on, clase = '') => `<button class="btn ${clase}" data-acc="${acc}" ${on ? '' : 'disabled'}>${ico}${txt}</button>`;
@@ -196,6 +209,7 @@ function cabExpediente() {
         <div class="nota">${esc(e.parroquia.nombre || '')}${e.parroquia.localidad ? ' · ' + esc(e.parroquia.localidad) : ''} · Llegó el ${esc(fechaHora(e.llegada))}${e.para ? ` para <strong>${esc(e.para)}</strong>` : ''}${e.parroquia.email ? ` · <a href="mailto:${esc(e.parroquia.email)}">${esc(e.parroquia.email)}</a>` : ''}</div></div>
       <span class="vc-estado grande est-${est}">${esc(VIC.estado(est).nombre)}</span>
     </div>
+    ${firmasRecibidas(e)}
     ${est === 'devuelto_parroquia' && avisos ? `<div class="vc-aviso-rojo">La parroquia ha respondido o corregido ${avisos} ${avisos === 1 ? 'dato' : 'datos'}: están marcados con un punto rojo.</div>` : ''}
     ${est === 'aprobado_contactar' ? `<div class="vc-telefonos"><span>Contactar con los novios</span>${tel('novio')}${tel('novia')}</div>` : ''}
     <div class="vc-acciones">
@@ -504,9 +518,11 @@ async function prepararPaginas() {
   V.paginas = Motor.paginas(res).map((ops, i) => paginaSVG(ops, i + 1));
 }
 function paginaSVG(ops, n) {
-  const zonas = [], textos = [], finales = {};
+  const zonas = [], textos = [], imagenes = [], finales = {};
   ops.forEach(o => {
     if (o.tipo === 'zona') zonas.push(o);
+    // firmas de los novios, testigos y firmante, y el sello (el fondo del impreso va aparte, más abajo)
+    else if (o.tipo === 'img') { if (!(o.x === 0 && o.y === 0 && Math.abs(o.w - A4.w) < 1)) imagenes.push(`<image href="${o.src}" x="${o.x.toFixed(2)}" y="${o.y.toFixed(2)}" width="${o.w.toFixed(2)}" height="${o.h.toFixed(2)}" preserveAspectRatio="xMidYMid meet"/>`); }
     else if (o.tipo === 'txt') {
       const w = Motor.ancho(o.t, o.tam, o.negrita, o.fuente);
       textos.push(`<text x="${o.x.toFixed(2)}" y="${o.y.toFixed(2)}" font-size="${o.tam}"${o.negrita ? ' font-weight="bold"' : ''} fill="${o.color || '#111'}" textLength="${w.toFixed(2)}" lengthAdjust="spacingAndGlyphs"${o.alinear === 'centro' ? '' : ''}>${esc(o.t)}</text>`);
@@ -527,7 +543,7 @@ function paginaSVG(ops, n) {
   });
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${A4.w} ${A4.h}" font-family="Helvetica, Arial, sans-serif" class="vc-svg" data-pagina="${n}">
     <rect width="100%" height="100%" fill="#fff"/><image href="../fondos/expediente-${String(n).padStart(2, '0')}.jpg" x="0" y="0" width="${A4.w}" height="${A4.h}"/>
-    <g class="vc-zonas">${rects.join('')}</g><g class="vc-textos">${textos.join('')}</g><g>${iconos.join('')}</g></svg>`;
+    <g class="vc-imagenes">${imagenes.join('')}</g><g class="vc-zonas">${rects.join('')}</g><g class="vc-textos">${textos.join('')}</g><g>${iconos.join('')}</g></svg>`;
 }
 const paginaHTML = n => n ? V.paginas[n - 1] : '<div class="vc-pag-vacia">Fin del expediente</div>';
 function vistaRevision() {

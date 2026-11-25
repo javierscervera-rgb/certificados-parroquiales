@@ -154,7 +154,7 @@ var VIC = (function () {
   }
   function firmanteDe(f) {
     f = f && typeof f === 'object' ? f : {};
-    return { nombre: texto(f.nombre).slice(0, 300), cargo: texto(f.cargo).slice(0, 300), firma: imagen(f.firma, 400000) };
+    return { nombre: texto(f.nombre).slice(0, 300), cargo: texto(f.cargo).slice(0, 300), firma: imagen(f.firma, 800000) };
   }
   // Identificador de una marca nueva: el que propone quien la crea (así coincide en su pantalla) si es válido y no se repite
   function nuevoId(exp, o, util) {
@@ -208,7 +208,7 @@ var VIC = (function () {
         var vic = {}, x;
         for (x in exp.datos) if (/^vic_/.test(x)) vic[x] = exp.datos[x];
         var nuevos = {};
-        for (x in o.datos || {}) if (!/^vic_/.test(x)) nuevos[x] = /^data:image\//.test(String(o.datos[x])) ? imagen(o.datos[x], 200000) : texto(o.datos[x]);
+        for (x in o.datos || {}) if (!/^vic_/.test(x)) nuevos[x] = /^data:image\//.test(String(o.datos[x])) ? imagen(o.datos[x], 300000) : texto(o.datos[x]);
         for (x in vic) nuevos[x] = vic[x];
         exp.datos = nuevos;
       }
@@ -235,7 +235,7 @@ var VIC = (function () {
       id: util.id(), version: 1, llegada: ahora, actualizado: ahora, estado: 'pendiente_revision',
       para: correo(envio.para),
       historial: [{ fecha: ahora, estado: 'pendiente_revision', de: 'parroquia' }],
-      parroquia: envio.parroquia || {}, firmante: firmanteDe(envio.firmante), sello: imagen(envio.sello, 600000), fechaDocumento: envio.fechaDocumento || '',
+      parroquia: envio.parroquia || {}, firmante: firmanteDe(envio.firmante), sello: imagen(envio.sello, 1000000), fechaDocumento: envio.fechaDocumento || '',
       datos: {}, marcas: {}, resueltas: {},
     };
     aplicar(exp, [{ op: 'datos', datos: envio.datos || {} }], 'parroquia', util);
@@ -338,7 +338,7 @@ var VIC = (function () {
             exp = A.leer(p.id);
             aplicar(exp, [{ op: 'datos', datos: envio.datos }], 'parroquia', A.util);
             exp.parroquia = envio.parroquia; exp.firmante = envio.firmante ? firmanteDe(envio.firmante) : exp.firmante; exp.fechaDocumento = envio.fechaDocumento || exp.fechaDocumento;
-            if (envio.sello !== undefined) exp.sello = imagen(envio.sello, 600000);
+            if (envio.sello !== undefined) exp.sello = imagen(envio.sello, 1000000);
             // mientras nadie lo ha revisado, la parroquia puede cambiar a quién va
             if (para && exp.estado === 'pendiente_revision') exp.para = para;
             exp.historial.push({ fecha: A.util.ahora(), estado: exp.estado, de: 'parroquia', reenvio: true });
