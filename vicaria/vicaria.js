@@ -613,7 +613,9 @@ async function pantallaCompleta() {
 }
 document.addEventListener('fullscreenchange', () => {
   const b = document.querySelector('[data-acc="pantalla"] span'); if (b) b.textContent = document.fullscreenElement ? 'Salir de pantalla completa' : 'Pantalla completa';
-  cerrarPop(); medirLibro();
+  // al entrar, una ventana abierta fuera del libro no se vería; al salir (también cuando el iPad la quita al escribir) sigue abierta
+  if (_pop && document.fullscreenElement && !document.fullscreenElement.contains(_pop)) cerrarPop();
+  medirLibro(); colocarPop();
 });
 // Al pasar el cursor por un dato se resaltan todas sus partes (p. ej. un dato en dos líneas)
 document.addEventListener('mouseover', e => {
@@ -623,8 +625,11 @@ document.addEventListener('mouseover', e => {
 });
 
 /* ---------------- VENTANA PARA RECTIFICAR, ANOTAR O RELLENAR ---------------- */
-let _pop = null;
-function cerrarPop() { if (_pop) { _pop.remove(); _pop = null; } }
+let _pop = null, _recolocar = false;
+function cerrarPop() {
+  if (_pop) { _pop.remove(); _pop = null; }
+  if (_recolocar) { _recolocar = false; recolocar(); }   // la ventana cambió de tamaño mientras estaba abierta
+}
 function control(k, v, id) {
   const c = VIC_CAMPOS.campo(k);
   if (c.tipo === 'textarea' || String(v || '').length > 60) return `<textarea id="${id}" data-pk="${k}" rows="3">${esc(v)}</textarea>`;
@@ -663,16 +668,29 @@ function abrirPop(keys, ancla, modo = 'menu') {
   p.innerHTML = `<button class="vc-pop-x" data-pop="cerrar" aria-label="Cerrar">✕</button><div class="vc-pop-tit">${esc(titulo)}</div>${cuerpo}`;
   (document.fullscreenElement || document.body).appendChild(p);
   _pop = p; p._ancla = ancla;
+  colocarPop();
+  const foco = p.querySelector('textarea, input, select');
+  if (foco && modo !== 'menu') { foco.focus(); if (foco.select && foco.tagName !== 'SELECT') foco.select(); }
+}
+// Pone la ventana junto a su dato. Si el dato se ha vuelto a pintar, la busca por su clave.
+function colocarPop() {
+  const p = _pop; if (!p) return;
+  if (!p.isConnected) { _pop = null; return; }
+  let ancla = p._ancla;
+  if (!ancla || !ancla.isConnected) {
+    const k = CSS.escape(p.dataset.keys);
+    ancla = document.querySelector(`.vc-icono[data-k="${k}"], .vc-zona[data-k="${k}"], .vc-campo[data-k="${k}"], [data-nota="${k}"]`);
+    if (!ancla) return;
+    p._ancla = ancla;
+  }
   const r = ancla.getBoundingClientRect(), pw = p.offsetWidth, ph = p.offsetHeight;
   let x = r.right + 10, y = r.top - 8;
   if (x + pw > window.innerWidth - 10) x = Math.max(10, r.left - pw - 10);
   if (x < 10) x = Math.min(window.innerWidth - pw - 10, Math.max(10, r.left));
   if (y + ph > window.innerHeight - 10) y = Math.max(10, window.innerHeight - ph - 10);
-  // en pantalla completa va fija; si no, se mueve con la página
-  if (document.fullscreenElement) { p.style.position = 'fixed'; p.style.left = x + 'px'; p.style.top = y + 'px'; }
+  // en pantalla completa (o si se abrió en ella) va fija; si no, se mueve con la página
+  if (p.parentElement !== document.body) { p.style.position = 'fixed'; p.style.left = x + 'px'; p.style.top = y + 'px'; }
   else { p.style.position = 'absolute'; p.style.left = (x + window.scrollX) + 'px'; p.style.top = (y + window.scrollY) + 'px'; }
-  const foco = p.querySelector('textarea, input, select');
-  if (foco && modo !== 'menu') { foco.focus(); if (foco.select && foco.tagName !== 'SELECT') foco.select(); }
 }
 async function accionPop(t) {
   const a = t.dataset.pop, keys = _pop.dataset.keys.split(' '), ancla = _pop._ancla, k0 = keys[0];
@@ -897,7 +915,17 @@ document.addEventListener('input', e => {
   (V.alProv = V.alProv || {})[el.dataset.al] = el.value;   // provisional: al salir del campo se guarda de verdad
   previaAlegato();
 });
-window.addEventListener('resize', () => { if (V.vista === 'detalle') colocarNotas(); if (V.vista === 'revision') medirLibro(); cerrarPop(); });
+// Al cambiar el tamaño se recolocan las notas, el libro y la ventana abierta (sin cerrarla).
+// En el iPad y los móviles, al salir el teclado o esconderse la barra del navegador solo cambia el alto:
+// entonces no se mueve nada mientras haya una ventana abierta, para poder escribir en ella; se recoloca al cerrarla.
+let _anchoVentana = document.documentElement.clientWidth;
+function recolocar() { if (V.vista === 'detalle') colocarNotas(); if (V.vista === 'revision') medirLibro(); colocarPop(); }
+window.addEventListener('resize', () => {
+  const ancho = document.documentElement.clientWidth, soloAlto = ancho === _anchoVentana;
+  _anchoVentana = ancho;
+  if (_pop && soloAlto) { _recolocar = true; return; }
+  recolocar();
+});
 window.addEventListener('hashchange', ir);
 // Al volver a la pestaña, trae lo que haya cambiado (respuestas de las parroquias, expedientes nuevos)
 let _ultimaVuelta = 0;
