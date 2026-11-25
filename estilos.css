@@ -35,6 +35,7 @@ html[data-tema="claro"] {
   color-scheme: light;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; }
 body { font-family: var(--sans); color: var(--tinta); background: var(--fondo); font-size: 14px; }
 button { font: inherit; cursor: pointer; }
