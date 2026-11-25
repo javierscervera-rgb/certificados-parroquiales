@@ -297,6 +297,13 @@ var VIC = (function () {
       ind[exp.id] = entrada(exp, claveHash);
       A.guardarIndice(ind);
     }
+    // Datos de la Vicaría de un titular. Los que se guardaron con la versión anterior del buzón
+    // (uno solo, en configuracion.json) son del titular del buzón.
+    function configDe(titular) {
+      var cfgs = A.leerAparte('configuraciones') || {}, c = cfgs[titular];
+      if (!c && titular === defecto()) c = A.leerAparte('configuracion');
+      return limpiarConfig(c || {});
+    }
     function expedienteVisible(p) {
       var email = quien(p), ind = A.indice(), e = ind[p.id];
       if (!e || !puedeVer(email, e.para, accesos(), true)) throw new Error('No tienes acceso a este expediente.');
@@ -380,8 +387,7 @@ var VIC = (function () {
       expediente: function (p) {
         var v = expedienteVisible(p), exp = A.leer(p.id);
         if (!exp) throw new Error('No existe ese expediente.');
-        var cfgs = A.leerAparte('configuraciones') || {};
-        return { expediente: exp, config: limpiarConfig(cfgs[exp.para || defecto()] || {}) };
+        return { expediente: exp, config: configDe(exp.para || defecto()) };
       },
       ops: function (p) {
         return A.bloquear(function () {
@@ -393,8 +399,8 @@ var VIC = (function () {
       },
       // Datos de la Vicaría (Alegato V) y lista de accesos: los del titular que entra
       configuracion: function (p) {
-        var email = quien(p), cfgs = A.leerAparte('configuraciones') || {}, acc = accesos();
-        return { config: limpiarConfig(cfgs[email] || {}), accesos: acc[email] || [], buzones: buzones(email, acc) };
+        var email = quien(p), acc = accesos();
+        return { config: configDe(email), accesos: acc[email] || [], buzones: buzones(email, acc) };
       },
       guardarConfig: function (p) {
         var email = quien(p), c = limpiarConfig(p.config);

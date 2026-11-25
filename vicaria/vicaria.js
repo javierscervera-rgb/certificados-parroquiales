@@ -325,8 +325,12 @@ function alDatos() {
   return d;
 }
 // Datos de la Vicaría: los guardados, y si faltan, los habituales
+// Datos de la Vicaría del titular del expediente: si es mío (o llegó sin destinatario), los míos, que son los
+// más recientes; si no, los que manda el buzón con el expediente.
+const tieneDatos = c => !!c && Object.keys(c).some(k => c[k]);
+const expMio = () => !!V.exp && (!V.exp.para || V.exp.para === miCorreo());
 function configVicaria() {
-  const c = (V.exp && V.exp.para === miCorreo() ? V.config : V.configPara) || V.configPara || {}, r = { diocesisTitulo: 'Arzobispado de Madrid', vicarioCargo: 'Vicario Episcopal', vicaria: (V.exp && V.exp.parroquia && V.exp.parroquia.vicaria) || '' };
+  const c = (expMio() && tieneDatos(V.config) ? V.config : null) || (tieneDatos(V.configPara) ? V.configPara : null) || V.config || {}, r = { diocesisTitulo: 'Arzobispado de Madrid', vicarioCargo: 'Vicario Episcopal', vicaria: (V.exp && V.exp.parroquia && V.exp.parroquia.vicaria) || '' };
   Object.keys(c).forEach(k => { if (c[k]) r[k] = c[k]; });
   return r;
 }
@@ -345,7 +349,7 @@ function vistaAlegato() {
     <div class="vc-doc">
       <p class="nota" style="margin:0 0 12px">Los datos salen del expediente, con sus rectificaciones. Lo que cambies aquí <strong>solo cambia el Alegato V</strong>; el expediente de la parroquia no se toca.</p>
       ${aprobado ? '' : '<p class="vc-aviso-naranja">El expediente aún no está aprobado.</p>'}
-      ${faltan.length ? `<p class="vc-aviso-naranja">Faltan datos de la Vicaría (${faltan.map(k => ({ vicaria: 'nombre de la vicaría', vicario: 'vicario', vicariaCiudad: 'ciudad' })[k]).join(', ')}). ${V.exp.para === miCorreo() ? '<a href="#/datos">Rellénalos en «Mi buzón»</a>: valen para todos tus Alegatos.' : `Los pone el titular del buzón (${esc(V.exp.para || '—')}) en «Mi buzón».`}</p>` : ''}
+      ${faltan.length ? `<p class="vc-aviso-naranja">Faltan datos de la Vicaría (${faltan.map(k => ({ vicaria: 'nombre de la vicaría', vicario: 'vicario', vicariaCiudad: 'ciudad' })[k]).join(', ')}). ${expMio() ? '<a href="#/datos">Rellénalos en «Mi buzón»</a>: valen para todos tus Alegatos.' : `Los pone el titular del buzón (${esc(V.exp.para || '—')}) en «Mi buzón».`}</p>` : ''}
       <div class="vc-pareja vc-al-pareja">${A.pareja.map(col => `<div class="vc-col"><h4>${esc(col.titulo)}</h4><div class="rejilla">${col.campos.map(campoAlegato).join('')}</div></div>`).join('')}</div>
       <div class="vc-bloque"><h4>Alegato</h4><div class="rejilla">${A.campos.map(campoAlegato).join('')}</div></div>
     </div>
@@ -450,7 +454,7 @@ async function guardarConfigVicaria(b) {
   try {
     if (V.configLocal) { V.config = VIC.limpiarConfig(c); guardar('config', V.config); }
     else V.config = await VicariaServicio.guardarConfig(token(), c);
-    if (V.exp && V.exp.para === miCorreo()) V.configPara = V.config;
+    if (expMio()) V.configPara = V.config;
     aviso('Datos de la Vicaría guardados.');
     history.length > 1 ? history.back() : (location.hash = '#/');
   } catch (e) { if (!errorDeSesion(e)) aviso('No se pudieron guardar: ' + e.message, 6000); }
