@@ -344,6 +344,7 @@ function render() {
   else app.innerHTML = vistaFormulario();
   if (estado.vista === 'form') actualizarPrevia();
   if (estado.vista === 'menu') { ajustarTareas(); if (typeof Callejero !== 'undefined') Callejero.montar(); }
+  ordenTab();
   if (estado.vista !== 'menu' && estado.vista !== 'revision') setTimeout(irAlPrimerVacio, 0);
 }
 function irA(vista) { estado.vista = vista; render(); window.scrollTo(0, 0); }
@@ -1346,6 +1347,13 @@ function camposNavegables() {
   });
   return lista;
 }
+// Orden del Tab propio del navegador (el que se usa en iPad): en cada grupo de opciones solo la elegida
+function ordenTab() {
+  document.querySelectorAll('.sexo').forEach(g => {
+    const bs = [...g.querySelectorAll('button')], on = bs.find(b => b.classList.contains('on')) || bs[0];
+    bs.forEach(b => { b.tabIndex = b === on ? 0 : -1; });
+  });
+}
 // Tras volver a pintar la pantalla, devuelve el foco al mismo control
 function reenfocar(selector) {
   requestAnimationFrame(() => { const el = document.querySelector(selector); if (el) el.focus({ preventScroll: true }); });
@@ -1376,7 +1384,10 @@ document.addEventListener('keydown', e => {
     if (opcion) reenfocar(`[data-opcion="${opcion}"] button[data-v="${otro.dataset.v}"]`); else otro.focus();
     return;
   }
-  if (e.key !== 'Tab' || e.ctrlKey || e.altKey || e.metaKey) return;
+  if (!(e.key === 'Tab' || e.code === 'Tab' || e.keyCode === 9) || e.ctrlKey || e.altKey || e.metaKey) return;
+  // iPad/iPhone: Safari y Chrome no dejan mover el foco por programa al pulsar Tab en el teclado físico,
+  // así que ahí se deja el Tab del propio navegador (el orden de la página ya es el mismo; ver ordenTab)
+  if (esIOS) return;
   const lista = camposNavegables();
   const i = lista.indexOf(document.activeElement);
   if (i < 0) return; // fuera de los campos: comportamiento normal
@@ -1480,7 +1491,7 @@ document.addEventListener('click', async e => {
   else if (t.id === 'm_enviar') enviarCorreo(t);
   else if (t.closest('[data-sexo]')) {
     estado.registro.sexo = t.dataset.v; estado.registro.sexo_manual = '1'; guardarRegistro();
-    t.parentElement.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === t));
+    t.parentElement.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === t)); ordenTab();
     actualizarPrevia();
   }
   else if (t.id === 'anadirFirma') { estado.config.firmas.push({ nombre: '', cargo: '', firma: '' }); guardarConfig(); render(); }
@@ -1504,6 +1515,7 @@ function sexoAutomatico() {
   if (!s || s === d.sexo) return;
   d.sexo = s;
   document.querySelectorAll('[data-sexo] button').forEach(b => b.classList.toggle('on', b.dataset.v === s));
+  ordenTab();
 }
 
 document.addEventListener('input', e => {
