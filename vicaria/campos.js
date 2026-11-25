@@ -14,6 +14,7 @@ const VIC_CAMPOS = (() => {
     { id: 't2', nombre: 'Testigo 2' },
     { id: 'ultima', nombre: 'Última página' },
     { id: 'vicaria', nombre: 'Vicaría', soloVicaria: true },
+    { id: 'alegato', nombre: 'Alegato V', soloVicaria: true, propia: true },   // pantalla propia en la web de la Vicaría
   ];
   const JURAMENTO = '¿Acepta Vd. responder a las siguientes preguntas bajo juramento?';
 

@@ -7,6 +7,8 @@ Circuito del expediente matrimonial entre la parroquia (Certificados) y la Vicar
   - **General**: lista de los expedientes que llegan (fecha de llegada, apellidos del novio y de la novia, parroquia, estado). Se ordena por llegada, estado o apellidos. Los archivados solo se ven con «Ver archivados». Los devueltos por la parroquia salen en rojo.
   - **Detalle**: el expediente por pestañas (más la pestaña **Vicaría**, para la aprobación de la última página), con márgenes. Al pulsar un dato se puede **rectificar** (el original queda tachado y el nuevo debajo) o **crear una nota** (sale en rojo en el margen, con una línea hasta el dato).
   - **Revisión**: el expediente sobre el impreso oficial, como un libro de dos páginas que se pasan con animación, con pantalla completa. Los datos se resaltan al pasar el cursor; al pulsarlos se rectifican o se anotan. Lo anotado sale en amarillo con un icono desplegable; el punto rojo marca las respuestas de la parroquia. La aprobación de la última página se rellena pulsando sobre ella.
+  - **Alegato V** (pestaña del Detalle): los mismos campos y el mismo modelo que «Alegato V» en Certificados, rellenos con los datos del expediente (con sus rectificaciones). Lo que se cambia ahí solo vale para el Alegato (se guarda en `vic_alegato`; el expediente no se toca) y se puede «Restablecer». Vista previa de las dos páginas e **Imprimir Alegato V**.
+  - **⚙ Datos de la Vicaría** (cabecera): arzobispado, nombre de la vicaría, vicario y cargo, dirección, ciudad, email, teléfono y logo de la diócesis para el Alegato V. Se guardan en el buzón (`configuracion.json`) y valen para todas las cuentas de la Vicaría.
   - Botones: **Aprobado** (destaca los teléfonos de los novios), **Devolver a Parroquia**, **Novios avisados**, **Alegato V recogido**, **Imprimir expediente**, **Archivar** / **Sacar del archivo**.
 - **Devolver a parroquia** · en Certificados aparece el botón rojo **Revisión** junto a «Expediente prematrimonial». Lleva a **Revisión de expediente**: la parroquia contesta las notas, aprueba las rectificaciones o corrige los datos y pulsa **Devolver a la vicaría**. Lo corregido o aprobado pasa también a su registro. Indicador: *Pendiente de revisión* (rojo), *Pendiente de aprobación* (naranja), *Aprobado* (verde).
 
@@ -36,6 +38,8 @@ Circuito del expediente matrimonial entre la parroquia (Certificados) y la Vicar
 7. (Opcional) Más personas de la Vicaría: en Apps Script, **Configuración del proyecto → Propiedades del script → `ADMINS`** = correos separados por comas.
 
 Si la pantalla de consentimiento del proyecto de Google Cloud está en modo *Prueba*, añade la cuenta de la Vicaría como usuario de prueba.
+
+Si el buzón se instaló antes de existir «Datos de la Vicaría», la web los guarda en el navegador y avisa: hay que actualizarlo.
 
 **Actualizar el buzón** tras cambiar `nucleo.js`: `python3 vicaria/actualizar-apps-script.py`, pega otra vez `apps-script.gs` y **Implementar → Gestionar implementaciones → Editar (lápiz) → Versión: nueva** (así la URL no cambia).
 

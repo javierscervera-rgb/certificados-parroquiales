@@ -34,6 +34,8 @@ const VicariaServicio = (() => {
       emailDe: () => 'modo.prueba@ejemplo.org',   // la Vicaría, en modo de prueba, siempre entra
       esAdmin: () => true,
       util: { ahora: () => new Date().toISOString(), id: () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8) },
+      leerConfig: () => bd().config || {},
+      guardarConfig: c => { const b = bd(); b.config = c; escribir(b); },
     });
     return _simulado;
   }
@@ -74,5 +76,7 @@ const VicariaServicio = (() => {
     listar: (token) => llamar('listar', { token }).then(r => r.lista),
     expediente: (token, id) => llamar('expediente', { token, id }).then(r => r.expediente),
     ops: (token, id, ops) => llamar('ops', { token, id, ops }),
+    configuracion: (token) => llamar('configuracion', { token }).then(r => r.config),
+    guardarConfig: (token, config) => llamar('guardarConfig', { token, config }).then(r => r.config),
   };
 })();
