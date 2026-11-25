@@ -32,7 +32,7 @@ Aplicación web para generar los certificados que se usan habitualmente en las p
 | Matrimonio | Fe de vida y estado (novio y novia) · Atestado de libertad (desde el expediente) | ✅ |
 | Matrimonio | Amonestaciones activas: lista (se llena sola desde la última página del expediente, se borra 5 días después de la fecha final) y edicto con varias parejas (solo imprimir o guardar) | ✅ |
 | Matrimonio | Certificación eclesiástica de matrimonio para el Registro Civil (4 ejemplares sobre el impreso oficial; solo imprimir o guardar) | ✅ |
-| Matrimonio | **Enviar a Vicaría (beta)**: el expediente completo pasa a la web «Expedientes Vicaría», que lo revisa, anota, devuelve y aprueba; la parroquia responde desde «Revisión» (ver `vicaria/README.md`) | 🧪 |
+| Matrimonio | **Enviar a Vicaría (beta)**: el expediente completo va al correo de la Vicaría que se elija y se revisa en la web «Expedientes Vicaría» (cada cuenta ve lo suyo y puede dar acceso a otras), que lo anota, devuelve, aprueba e imprime con su Alegato V; la parroquia responde desde «Revisión» (ver `vicaria/README.md`) | 🧪 |
 | Confirmación | Certificado de confirmación | ✅ |
 | Confirmación | Comunicación de confirmación | ✅ |
 | Confirmación | Certificado para ser padrino/madrina de confirmación | ✅ |

@@ -25,7 +25,10 @@ const V = {
   exp: null, errorExp: '', pestana: 'datos',
   spread: 0, paginas: null, girando: false,
   cola: [], enviando: false, estadoGuardado: '',
-  config: null, configLocal: false,   // datos de la Vicaría (Alegato V); configLocal: el buzón aún no sabe guardarlos
+  config: null, configLocal: false,   // mis datos de la Vicaría (Alegato V); configLocal: el buzón aún no sabe guardarlos
+  configPara: null,                   // datos de la Vicaría del titular del expediente abierto
+  accesos: [], buzones: [],           // a quién doy acceso · de quién veo los expedientes (yo incluido)
+  todo: VicariaServicio.modoPrueba(), // administradores: ver todo el buzón
 };
 
 function aviso(msg, ms = 3600) {
@@ -48,8 +51,9 @@ const fechaCorta = iso => { const d = new Date(iso); return iso && !isNaN(d) ? d
 function guardarSesion(s) { V.sesion = s; try { s ? sessionStorage.setItem('vicaria.sesion', JSON.stringify(s)) : sessionStorage.removeItem('vicaria.sesion'); } catch (e) {} }
 async function comprobarSesion(token, caduca) {
   const q = await VicariaServicio.quien(token);
-  if (!q.admin) { guardarSesion(null); V.avisoSesion = q.email ? `La cuenta ${q.email} no es de la Vicaría. Entra con la cuenta que instaló el buzón (o pide que la añadan).` : 'No se pudo comprobar la cuenta.'; return false; }
-  guardarSesion({ token, email: q.email, admin: true, caduca });
+  if (!q.email) { guardarSesion(null); V.avisoSesion = 'No se pudo comprobar la cuenta de Google.'; return false; }
+  guardarSesion({ token, email: q.email, admin: !!q.admin, caduca });
+  V.buzones = q.buzones || [q.email]; V.accesos = q.accesos || [];
   return true;
 }
 function entrarGoogle() {
@@ -69,9 +73,11 @@ function entrarGoogle() {
   cliente.requestAccessToken();
 }
 const token = () => (VicariaServicio.modoPrueba() ? 'prueba' : V.sesion && V.sesion.token);
+const miCorreo = () => (VicariaServicio.modoPrueba() ? VicariaServicio.correoPrueba() : (V.sesion && V.sesion.email) || '');
+const esAdmin = () => VicariaServicio.modoPrueba() || !!(V.sesion && V.sesion.admin);
 function sesionLista() {
   if (VicariaServicio.modoPrueba()) return true;
-  return !!(V.sesion && V.sesion.admin && V.sesion.caduca > Date.now() + 30000);
+  return !!(V.sesion && V.sesion.email && V.sesion.caduca > Date.now() + 30000);
 }
 // Si el buzón dice «no autorizado» la sesión ha caducado: se vuelve a pedir
 function errorDeSesion(e) {
@@ -97,14 +103,14 @@ const ICO = {
 };
 function cabecera(titulo, sub = '') {
   const s = V.sesion, prueba = VicariaServicio.modoPrueba();
-  const quien = prueba ? `<button class="chip aviso" data-acc="salir-prueba" title="Los expedientes se guardan solo en este navegador. Pulsa para salir del modo de prueba.">Modo de prueba</button>`
+  const quien = prueba ? `<button class="chip aviso" data-acc="salir-prueba" title="Los expedientes se guardan solo en este navegador. Entras como ${esc(VicariaServicio.correoPrueba())}, el último correo al que se envió desde Certificados. Pulsa para salir del modo de prueba.">Modo de prueba · ${esc(VicariaServicio.correoPrueba())}</button>`
     : s ? `<button class="chip ok" data-acc="salir" title="Cerrar sesión">☁ ${esc(s.email)}</button>` : '';
   const g = V.estadoGuardado;
   return `<header class="barra vc-barra">
     <div class="marca"><button class="marca-inicio" data-ir="#/" title="Ir a la lista de expedientes"><span class="parroquia">Expedientes Vicaría <em class="beta">beta</em></span></button><h1>${titulo}</h1>${sub}</div>
     <div class="cab-der">${g ? `<span class="chip ${g === 'error' ? 'aviso' : ''}" id="guardado">${g === 'guardando' ? 'Guardando…' : g === 'error' ? 'No se pudo guardar · reintentando' : '✓ Guardado'}</span>` : ''}
       <button class="modo" type="button" data-acc="modo" title="Modo día / noche" aria-label="Cambiar entre modo día y modo noche"><svg class="luna" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><svg class="sol" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
-      ${sesionLista() ? `<button class="btn-cab" data-ir="#/datos" title="Nombre, vicario, dirección y logo para el Alegato V">⚙ Datos de la Vicaría</button>` : ''}
+      ${sesionLista() ? `<button class="btn-cab" data-ir="#/datos" title="Quién tiene acceso a tus expedientes y datos de la Vicaría para el Alegato V">⚙ Mi buzón</button>` : ''}
       ${quien}</div>
   </header>`;
 }
@@ -116,7 +122,7 @@ function vistaEntrada() {
   <main><div class="tarjeta vc-entrada">
     <h2>Bienvenido</h2>
     <p>Aquí llegan los expedientes matrimoniales que las parroquias envían desde <strong>Certificados</strong> con el botón «Enviar a Vicaría».</p>
-    ${conf ? `<p>Entra con la cuenta de Google de la Vicaría.</p>
+    ${conf ? `<p>Entra con la cuenta de Google del correo al que las parroquias te envían los expedientes (o de alguien que te haya dado acceso). Solo verás los tuyos.</p>
       ${V.avisoSesion ? `<p class="vc-error">${esc(V.avisoSesion)}</p>` : ''}
       <button class="btn prim grande" data-acc="entrar" ${V.entrando ? 'disabled' : ''}>${V.entrando ? 'Entrando…' : 'Entrar con Google'}</button>`
     : `<p class="vc-error">El buzón de la Vicaría aún no está instalado (falta su dirección en <code>config.js</code>).</p>
@@ -141,6 +147,7 @@ function ordenar(lista) {
 function vistaGeneral() {
   if (!V.lista) return `${cabecera('Expedientes recibidos')}<main><div class="tarjeta vc-cargando">${V.errorLista ? `<p class="vc-error">${esc(V.errorLista)}</p><button class="btn prim" data-acc="actualizar">Reintentar</button>` : 'Cargando expedientes…'}</div></main>`;
   const activos = V.lista.filter(e => e.estado !== 'archivado'), archivados = V.lista.filter(e => e.estado === 'archivado');
+  const conPara = V.todo || new Set(V.lista.map(e => e.para || '')).size > 1 || V.buzones.length > 1;
   const visibles = ordenar(V.archivados ? archivados : activos);
   const cuenta = id => activos.filter(e => e.estado === id).length;
   const chips = VIC.ESTADOS.filter(s => s.id !== 'archivado' && cuenta(s.id)).map(s => `<span class="vc-chip est-${s.id}">${cuenta(s.id)} · ${esc(s.corto)}</span>`).join('');
@@ -149,25 +156,26 @@ function vistaGeneral() {
       <td><strong>${esc(e.novio_apellidos || '—')}</strong><small>${esc(e.novio_nombre)}</small></td>
       <td><strong>${esc(e.novia_apellidos || '—')}</strong><small>${esc(e.novia_nombre)}</small></td>
       <td class="vc-parroquia">${esc(e.parroquia)}<small>${esc(e.localidad)}</small></td>
+      ${conPara ? `<td class="vc-para">${esc(e.para || '(sin destinatario)')}</td>` : ''}
       <td><span class="vc-estado est-${e.estado}">${esc(VIC.estado(e.estado).nombre)}</span>${e.avisos ? `<span class="vc-punto" title="${e.avisos} ${e.avisos === 1 ? 'respuesta' : 'respuestas'} de la parroquia"></span>` : ''}</td>
     </tr>`).join('');
   return `${cabecera('Expedientes recibidos')}
   <main>
     <section class="tarjeta vc-bienvenida">
-      <div><h2>Bienvenido</h2><p>Expedientes matrimoniales enviados por las parroquias. Pulsa uno para revisarlo.</p></div>
+      <div><h2>Bienvenido</h2><p>Expedientes matrimoniales enviados por las parroquias ${V.todo ? '(<strong>todo el buzón</strong>)' : `a <strong>${esc(V.buzones.join(', ') || miCorreo())}</strong>`}. Pulsa uno para revisarlo.</p></div>
       <div class="vc-chips">${chips || '<span class="nota">No hay expedientes pendientes.</span>'}</div>
     </section>
     <section class="tarjeta">
       <div class="vc-herramientas">
         <div class="vc-orden" role="group" aria-label="Ordenar"><span>Ordenar por</span>${ORDENES.map(([id, n]) => `<button class="${V.orden.por === id ? 'on' : ''}" data-orden="${id}">${n}${V.orden.por === id ? (V.orden.inv ? ' ↑' : ' ↓') : ''}</button>`).join('')}</div>
-        <div class="fila"><button class="btn ${V.archivados ? 'prim' : ''}" data-acc="archivados">${ICO.archivo}${V.archivados ? 'Volver a los activos' : `Ver archivados (${archivados.length})`}</button>
+        <div class="fila">${esAdmin() ? `<button class="btn ${V.todo ? 'prim' : ''}" data-acc="todo" title="Eres administrador del buzón">${V.todo ? 'Ver solo los míos' : 'Ver todo el buzón'}</button>` : ''}<button class="btn ${V.archivados ? 'prim' : ''}" data-acc="archivados">${ICO.archivo}${V.archivados ? 'Volver a los activos' : `Ver archivados (${archivados.length})`}</button>
           <button class="btn" data-acc="actualizar" title="Actualizar">${ICO.actualizar}Actualizar</button></div>
       </div>
       ${V.archivados ? '<p class="nota vc-solo-archivados">Mostrando solo los expedientes archivados.</p>' : ''}
       ${visibles.length ? `<div class="vc-tabla-caja"><table class="vc-tabla">
-        <thead><tr><th>Fecha de llegada</th><th>Apellidos novio</th><th>Apellidos novia</th><th>Parroquia</th><th>Estado</th></tr></thead>
+        <thead><tr><th>Fecha de llegada</th><th>Apellidos novio</th><th>Apellidos novia</th><th>Parroquia</th>${conPara ? '<th>Para</th>' : ''}<th>Estado</th></tr></thead>
         <tbody>${filas}</tbody></table></div>`
-      : `<p class="nota" style="padding:20px 4px">${V.archivados ? 'No hay expedientes archivados.' : 'Todavía no ha llegado ningún expediente.'}</p>`}
+      : `<p class="nota" style="padding:20px 4px">${V.archivados ? 'No hay expedientes archivados.' : `Todavía no ha llegado ningún expediente${V.todo ? '' : ` a ${esc(V.buzones.join(', ') || miCorreo())}`}. Las parroquias lo envían desde Certificados escribiendo este correo en «Enviar a Vicaría».`}</p>`}
     </section>
   </main>`;
 }
@@ -185,7 +193,7 @@ function cabExpediente() {
     <div class="vc-cab-fila">
       <button class="btn" data-ir="#/">${ICO.ant}Expedientes</button>
       <div class="vc-cab-tit"><h2>${esc(VIC.titulo(e))}</h2>
-        <div class="nota">${esc(e.parroquia.nombre || '')}${e.parroquia.localidad ? ' · ' + esc(e.parroquia.localidad) : ''} · Llegó el ${esc(fechaHora(e.llegada))}${e.parroquia.email ? ` · <a href="mailto:${esc(e.parroquia.email)}">${esc(e.parroquia.email)}</a>` : ''}</div></div>
+        <div class="nota">${esc(e.parroquia.nombre || '')}${e.parroquia.localidad ? ' · ' + esc(e.parroquia.localidad) : ''} · Llegó el ${esc(fechaHora(e.llegada))}${e.para ? ` para <strong>${esc(e.para)}</strong>` : ''}${e.parroquia.email ? ` · <a href="mailto:${esc(e.parroquia.email)}">${esc(e.parroquia.email)}</a>` : ''}</div></div>
       <span class="vc-estado grande est-${est}">${esc(VIC.estado(est).nombre)}</span>
     </div>
     ${est === 'devuelto_parroquia' && avisos ? `<div class="vc-aviso-rojo">La parroquia ha respondido o corregido ${avisos} ${avisos === 1 ? 'dato' : 'datos'}: están marcados con un punto rojo.</div>` : ''}
@@ -318,7 +326,7 @@ function alDatos() {
 }
 // Datos de la Vicaría: los guardados, y si faltan, los habituales
 function configVicaria() {
-  const c = V.config || {}, r = { diocesisTitulo: 'Arzobispado de Madrid', vicarioCargo: 'Vicario Episcopal', vicaria: (V.exp && V.exp.parroquia && V.exp.parroquia.vicaria) || '' };
+  const c = (V.exp && V.exp.para === miCorreo() ? V.config : V.configPara) || V.configPara || {}, r = { diocesisTitulo: 'Arzobispado de Madrid', vicarioCargo: 'Vicario Episcopal', vicaria: (V.exp && V.exp.parroquia && V.exp.parroquia.vicaria) || '' };
   Object.keys(c).forEach(k => { if (c[k]) r[k] = c[k]; });
   return r;
 }
@@ -337,7 +345,7 @@ function vistaAlegato() {
     <div class="vc-doc">
       <p class="nota" style="margin:0 0 12px">Los datos salen del expediente, con sus rectificaciones. Lo que cambies aquí <strong>solo cambia el Alegato V</strong>; el expediente de la parroquia no se toca.</p>
       ${aprobado ? '' : '<p class="vc-aviso-naranja">El expediente aún no está aprobado.</p>'}
-      ${faltan.length ? `<p class="vc-aviso-naranja">Faltan datos de la Vicaría (${faltan.map(k => ({ vicaria: 'nombre de la vicaría', vicario: 'vicario', vicariaCiudad: 'ciudad' })[k]).join(', ')}). <a href="#/datos">Rellénalos aquí</a>: valen para todos los Alegatos.</p>` : ''}
+      ${faltan.length ? `<p class="vc-aviso-naranja">Faltan datos de la Vicaría (${faltan.map(k => ({ vicaria: 'nombre de la vicaría', vicario: 'vicario', vicariaCiudad: 'ciudad' })[k]).join(', ')}). ${V.exp.para === miCorreo() ? '<a href="#/datos">Rellénalos en «Mi buzón»</a>: valen para todos tus Alegatos.' : `Los pone el titular del buzón (${esc(V.exp.para || '—')}) en «Mi buzón».`}</p>` : ''}
       <div class="vc-pareja vc-al-pareja">${A.pareja.map(col => `<div class="vc-col"><h4>${esc(col.titulo)}</h4><div class="rejilla">${col.campos.map(campoAlegato).join('')}</div></div>`).join('')}</div>
       <div class="vc-bloque"><h4>Alegato</h4><div class="rejilla">${A.campos.map(campoAlegato).join('')}</div></div>
     </div>
@@ -384,7 +392,10 @@ function repintarCampoAlegato(k) {
 
 /* ---------------- DATOS DE LA VICARÍA (para el Alegato V) ---------------- */
 async function cargarConfig() {
-  try { V.config = await VicariaServicio.configuracion(token()); V.configLocal = false; }
+  try {
+    const r = await VicariaServicio.configuracion(token());
+    V.config = r.config || {}; V.accesos = r.accesos || []; V.buzones = r.buzones || [miCorreo()]; V.configLocal = false;
+  }
   catch (e) {
     if (errorDeSesion(e)) return;
     // buzón instalado antes de existir esta opción: se guardan en este navegador hasta que se actualice
@@ -395,11 +406,24 @@ async function cargarConfig() {
 }
 function vistaDatos() {
   const c = V.config;
-  if (!c) return `${cabecera('Datos de la Vicaría')}<main><div class="tarjeta vc-cargando">Cargando…</div></main>`;
+  if (!c) return `${cabecera('Mi buzón')}<main><div class="tarjeta vc-cargando">Cargando…</div></main>`;
+  const otros = V.buzones.filter(b => b !== miCorreo());
   const inp = (k, label, w = 12, ph = '') => `<div class="campo" style="grid-column:span ${w}"><label for="cfg_${k}">${label}</label><input type="text" id="cfg_${k}" data-cfg="${k}" value="${esc(c[k] || '')}" placeholder="${esc(ph)}" autocomplete="off"></div>`;
-  return `${cabecera('Datos de la Vicaría')}
-  <main><div class="tarjeta vc-datos">
-    <p class="nota" style="margin:0 0 14px">Salen en el <strong>Alegato V</strong> de todos los expedientes (los mismos datos que en Certificados → Datos de la parroquia → Vicaría).</p>
+  return `${cabecera('Mi buzón')}
+  <main>
+  <div class="tarjeta vc-datos vc-accesos">
+    <h3>Tu correo</h3>
+    <p class="vc-correo">${esc(miCorreo())}</p>
+    <p class="nota">Las parroquias te envían los expedientes escribiendo este correo en «Enviar a Vicaría».${otros.length ? ` También ves los de: <strong>${otros.map(esc).join(', ')}</strong>.` : ''}</p>
+    <h3 style="margin-top:18px">Personas con acceso a tus expedientes</h3>
+    <p class="nota" style="margin-top:0">Pueden verlos, anotarlos, aprobarlos e imprimirlos. Solo tú puedes añadir o quitar personas. Tienen que entrar con una cuenta de Google con ese correo.</p>
+    ${V.configLocal ? '<p class="vc-aviso-naranja">El buzón es de una versión anterior y aún no permite dar acceso a otros correos.</p>' : `
+    <ul class="vc-lista-accesos">${V.accesos.length ? V.accesos.map(a => `<li><span>${esc(a)}</span><button class="btn" data-quitar-acceso="${esc(a)}">Quitar</button></li>`).join('') : '<li class="nota">Nadie más tiene acceso.</li>'}</ul>
+    <div class="fila vc-nuevo-acceso"><input type="email" id="nuevoAcceso" placeholder="correo@ejemplo.org" autocomplete="off"><button class="btn prim" data-acc="anadir-acceso">Dar acceso</button></div>`}
+  </div>
+  <div class="tarjeta vc-datos" style="margin-top:18px">
+    <h3>Datos de la Vicaría</h3>
+    <p class="nota" style="margin:0 0 14px">Salen en el <strong>Alegato V</strong> de los expedientes dirigidos a ti (los mismos datos que en Certificados → Datos de la parroquia → Vicaría).</p>
     ${V.configLocal ? '<p class="vc-aviso-naranja">El buzón de la Vicaría es de una versión anterior: estos datos se guardan solo en este navegador hasta que se actualice (vicaria/README.md).</p>' : ''}
     <div class="rejilla">
       ${inp('diocesisTitulo', 'Arzobispado / Obispado', 12, 'Arzobispado de Madrid')}
@@ -412,7 +436,7 @@ function vistaDatos() {
         <div class="imgbox"><div class="vista">${c.logoDiocesis ? `<img src="${c.logoDiocesis}" alt="">` : 'sin imagen'}</div>
           <div class="imgbox-txt"><label class="btn archivo"><input type="file" accept="image/*" data-logo>Elegir imagen…</label>${c.logoDiocesis ? '<button class="btn" data-acc="quitar-logo">Quitar</button>' : ''}<div class="nota">PNG o JPG.</div></div></div></div>
     </div>
-    <div class="fila" style="justify-content:flex-end;margin-top:16px"><button class="btn" data-acc="volver">Volver</button><button class="btn prim" data-acc="guardar-config">Guardar</button></div>
+    <div class="fila" style="justify-content:flex-end;margin-top:16px"><button class="btn" data-acc="volver">Volver</button><button class="btn prim" data-acc="guardar-config">Guardar datos</button></div>
   </div></main>`;
 }
 function leerFormConfig() {
@@ -426,11 +450,25 @@ async function guardarConfigVicaria(b) {
   try {
     if (V.configLocal) { V.config = VIC.limpiarConfig(c); guardar('config', V.config); }
     else V.config = await VicariaServicio.guardarConfig(token(), c);
+    if (V.exp && V.exp.para === miCorreo()) V.configPara = V.config;
     aviso('Datos de la Vicaría guardados.');
     history.length > 1 ? history.back() : (location.hash = '#/');
   } catch (e) { if (!errorDeSesion(e)) aviso('No se pudieron guardar: ' + e.message, 6000); }
   b.disabled = false;
 }
+async function cambiarAccesos(lista, b) {
+  if (b) b.disabled = true;
+  try { V.accesos = await VicariaServicio.guardarAccesos(token(), lista); pintar(); const i = $('#nuevoAcceso'); if (i) i.focus(); }
+  catch (e) { if (!errorDeSesion(e)) aviso('No se pudo cambiar: ' + e.message, 6000); if (b) b.disabled = false; }
+}
+function anadirAcceso(b) {
+  const i = $('#nuevoAcceso'), c = VIC.correo(i && i.value);
+  if (!c) { aviso('Escribe un correo válido.'); i && i.focus(); return; }
+  if (c === miCorreo()) { aviso('Ese es tu propio correo.'); return; }
+  if (V.accesos.includes(c)) { aviso('Ya tiene acceso.'); return; }
+  cambiarAccesos([...V.accesos, c], b);
+}
+
 // Imagen subida → PNG/JPEG de 700 px como mucho (como en Certificados)
 function leerImagen(file) {
   return new Promise((res, rej) => {
@@ -730,16 +768,16 @@ async function imprimir(b, alegato) {
 
 /* ---------------- NAVEGACIÓN Y CARGA ---------------- */
 async function cargarLista() {
-  try { V.lista = await VicariaServicio.listar(token()); V.errorLista = ''; }
+  try { const r = await VicariaServicio.listar(token(), V.todo); V.lista = r.lista; V.buzones = r.buzones || V.buzones; V.errorLista = ''; }
   catch (e) { if (errorDeSesion(e)) return; V.errorLista = 'No se pudo cargar la lista: ' + e.message; }
   if (V.vista === 'general') pintar();
 }
 async function cargarExp(id, silencioso) {
   try {
-    const exp = await VicariaServicio.expediente(token(), id);
+    const r = await VicariaServicio.expediente(token(), id), exp = r.expediente;
     if (V.cola.length) return;                    // hay cambios propios sin guardar: se respeta lo de aquí
     if (silencioso && V.exp && V.exp.id === id && V.exp.version === exp.version) return;
-    V.exp = exp; V.errorExp = '';
+    V.exp = exp; V.configPara = r.config || null; V.errorExp = '';
     if (V.vista === 'revision') await prepararPaginas();
   } catch (e) { if (errorDeSesion(e)) return; V.errorExp = e.message; }
   if (V.id === id) pintar();
@@ -777,6 +815,8 @@ document.addEventListener('click', async e => {
   const ord = t.closest('[data-orden]');
   if (ord) { const por = ord.dataset.orden; V.orden = { por, inv: V.orden.por === por ? !V.orden.inv : false }; guardar('orden', V.orden); pintar(); return; }
   const pes = t.closest('[data-pestana]'); if (pes) { V.pestana = pes.dataset.pestana; pintar(); return; }
+  const qa = t.closest('[data-quitar-acceso]');
+  if (qa) { if (await confirmar(`¿Quitar el acceso de ${qa.dataset.quitarAcceso} a tus expedientes?`, 'Quitar')) cambiarAccesos(V.accesos.filter(x => x !== qa.dataset.quitarAcceso)); return; }
   const quitar = t.closest('[data-al-quitar]'); if (quitar) { guardarAlegato(quitar.dataset.alQuitar, alBase(quitar.dataset.alQuitar), true); return; }
   // pulsar un dato (detalle), una nota del margen o un dato del impreso (revisión)
   const icono = t.closest('.vc-icono'), zona = t.closest('.vc-zona'), campo = t.closest('.vc-campo[data-k]'), nota = t.closest('[data-nota]');
@@ -786,9 +826,9 @@ document.addEventListener('click', async e => {
   const b = t.closest('[data-acc]'); if (!b || b.disabled) return;
   const a = b.dataset.acc;
   if (a === 'entrar') entrarGoogle();
-  else if (a === 'prueba') { VicariaServicio.activarPrueba(true); aviso('Modo de prueba: los expedientes se guardan en este navegador.'); ir(); }
-  else if (a === 'salir-prueba') { if (await confirmar('¿Salir del modo de prueba?', 'Salir')) { VicariaServicio.activarPrueba(false); V.lista = null; ir(); } }
-  else if (a === 'salir') { if (await confirmar('¿Cerrar la sesión de la Vicaría en este navegador?', 'Cerrar sesión')) { try { google.accounts.oauth2.revoke(V.sesion.token, () => {}); } catch (x) {} guardarSesion(null); ir(); } }
+  else if (a === 'prueba') { VicariaServicio.activarPrueba(true); V.todo = true; aviso('Modo de prueba: los expedientes se guardan en este navegador.'); ir(); }
+  else if (a === 'salir-prueba') { if (await confirmar('¿Salir del modo de prueba?', 'Salir')) { VicariaServicio.activarPrueba(false); V.lista = null; V.todo = false; V.config = null; ir(); } }
+  else if (a === 'salir') { if (await confirmar('¿Cerrar la sesión de la Vicaría en este navegador?', 'Cerrar sesión')) { try { google.accounts.oauth2.revoke(V.sesion.token, () => {}); } catch (x) {} guardarSesion(null); Object.assign(V, { lista: null, config: null, accesos: [], buzones: [], todo: false, exp: null, id: null }); ir(); } }
   else if (a === 'modo') HSTema.cambiar();
   else if (a === 'actualizar') { V.lista = null; pintar(); cargarLista(); }
   else if (a === 'archivados') { V.archivados = !V.archivados; pintar(); }
@@ -796,6 +836,8 @@ document.addEventListener('click', async e => {
   else if (a === 'imprimir-alegato') imprimir(b, true);
   else if (a === 'ampliar-alegato') ampliarAlegato();
   else if (a === 'guardar-config') guardarConfigVicaria(b);
+  else if (a === 'anadir-acceso') anadirAcceso(b);
+  else if (a === 'todo') { V.todo = !V.todo; V.lista = null; pintar(); cargarLista(); }
   else if (a === 'quitar-logo') { V.config = { ...leerFormConfig(), logoDiocesis: '' }; pintar(); }
   else if (a === 'volver') history.length > 1 ? history.back() : (location.hash = '#/');
   else if (a === 'anterior') pasar(-1);
@@ -805,6 +847,7 @@ document.addEventListener('click', async e => {
 });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') cerrarPop();
+  if (e.key === 'Enter' && e.target.id === 'nuevoAcceso') { e.preventDefault(); anadirAcceso(); return; }
   const escribiendo = /INPUT|TEXTAREA|SELECT/.test(document.activeElement && document.activeElement.tagName);
   if (e.key === 'Enter' && !escribiendo) {
     const f = e.target.closest && (e.target.closest('tr[data-ir]') || e.target.closest('.vc-campo[data-k]') || e.target.closest('[data-nota]'));

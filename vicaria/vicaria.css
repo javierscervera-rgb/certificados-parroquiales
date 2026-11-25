@@ -225,3 +225,13 @@ main.vc-main-ancho { max-width: 1680px; }
 .vc-aviso-naranja a { color: var(--azul); font-weight: 600; }
 .vc-datos { max-width: 760px; margin: 0 auto; }
 @media (max-width: 1000px) { .vc-alegato { grid-template-columns: 1fr; } .vc-al-lado { position: static; } }
+
+/* Mi buzón: correo, accesos */
+.vc-datos h3 { margin: 0 0 8px; }
+.vc-correo { font-size: 20px; font-weight: 700; margin: 0 0 4px; word-break: break-all; }
+.vc-lista-accesos { list-style: none; margin: 10px 0; padding: 0; display: grid; gap: 6px; }
+.vc-lista-accesos li { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: var(--campo); border: 1px solid var(--borde); border-radius: 9px; padding: 6px 6px 6px 12px; }
+.vc-lista-accesos li span { word-break: break-all; }
+.vc-lista-accesos li.nota { background: none; border: 0; padding: 0; }
+.vc-nuevo-acceso input { flex: 1 1 240px; }
+.vc-tabla .vc-para { color: var(--suave); font-size: 13px; word-break: break-all; }

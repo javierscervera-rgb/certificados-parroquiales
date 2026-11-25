@@ -17,6 +17,8 @@ const VicariaServicio = (() => {
   const modoPrueba = () => { try { return localStorage.getItem(MODO) === 'prueba'; } catch (e) { return false; } };
   function activarPrueba(si) { try { si ? localStorage.setItem(MODO, 'prueba') : localStorage.removeItem(MODO); } catch (e) {} }
   const configurado = () => modoPrueba() || /^https:\/\//.test(url());
+  // Modo de prueba: la Vicaría entra como el último correo al que se envió desde Certificados en este navegador
+  const correoPrueba = () => String(leerLS('certificados.vicaria.para', '') || 'modo.prueba@ejemplo.org').toLowerCase();
 
   /* ---------- Modo de prueba: el mismo servidor, guardando en este navegador ---------- */
   let _simulado = null;
@@ -31,11 +33,12 @@ const VicariaServicio = (() => {
       leer: id => { const e = bd().expedientes[id]; return e ? JSON.parse(JSON.stringify(e)) : null; },
       guardar: exp => { const b = bd(); b.expedientes[exp.id] = exp; escribir(b); },
       hash, bloquear: f => f(),
-      emailDe: () => 'modo.prueba@ejemplo.org',   // la Vicaría, en modo de prueba, siempre entra
+      emailDe: () => correoPrueba(),   // en modo de prueba se entra como el último correo al que se envió (y como administrador)
       esAdmin: () => true,
+      porDefecto: () => correoPrueba(),
       util: { ahora: () => new Date().toISOString(), id: () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8) },
-      leerConfig: () => bd().config || {},
-      guardarConfig: c => { const b = bd(); b.config = c; escribir(b); },
+      leerAparte: nombre => (bd().aparte || {})[nombre] || null,
+      guardarAparte: (nombre, obj) => { const b = bd(); b.aparte = b.aparte || {}; b.aparte[nombre] = obj; escribir(b); },
     });
     return _simulado;
   }
@@ -65,7 +68,7 @@ const VicariaServicio = (() => {
   }
 
   return {
-    configurado, modoPrueba, activarPrueba, nuevaClave,
+    configurado, modoPrueba, activarPrueba, nuevaClave, correoPrueba,
     // Parroquia
     enviar: (p) => llamar('enviar', p),
     estados: (lista) => llamar('estados', { lista }),
@@ -73,10 +76,11 @@ const VicariaServicio = (() => {
     devolver: (id, clave, ops) => llamar('devolver', { id, clave, ops }),
     // Vicaría
     quien: (token) => llamar('quien', { token }),
-    listar: (token) => llamar('listar', { token }).then(r => r.lista),
-    expediente: (token, id) => llamar('expediente', { token, id }).then(r => r.expediente),
+    listar: (token, todo) => llamar('listar', { token, todo: !!todo }),
+    expediente: (token, id) => llamar('expediente', { token, id }),
     ops: (token, id, ops) => llamar('ops', { token, id, ops }),
-    configuracion: (token) => llamar('configuracion', { token }).then(r => r.config),
+    configuracion: (token) => llamar('configuracion', { token }),
     guardarConfig: (token, config) => llamar('guardarConfig', { token, config }).then(r => r.config),
+    guardarAccesos: (token, lista) => llamar('guardarAccesos', { token, lista }).then(r => r.accesos),
   };
 })();

@@ -6,8 +6,10 @@
      aparece el botón rojo «Revisión» junto a «Expediente prematrimonial».
    - Pantalla «Revisión de expediente»: notas y rectificaciones de la Vicaría,
      con respuesta, aprobación o corrección, y «Devolver a la vicaría».
+   El expediente va al correo que se elige al enviar (por defecto, el email de la Vicaría en
+   «Datos de la parroquia»): en «Expedientes Vicaría» lo ven esa cuenta de Google y a quien ella dé acceso.
    El enlace con la Vicaría se guarda en el propio registro (vicaria_id, vicaria_clave,
-   vicaria_enviado), así lo ven todos los ordenadores de la parroquia por Google Drive.
+   vicaria_enviado, vicaria_para), así lo ven todos los ordenadores de la parroquia por Google Drive.
    Se carga antes que app.js y solo usa sus funciones cuando se le llama.
    ============================================================ */
 
@@ -63,35 +65,48 @@ const Vicaria = (() => {
       return;
     }
     const prueba = VicariaServicio.modoPrueba();
+    // A quién va: se puede elegir mientras la Vicaría no lo haya empezado a revisar
+    const cambiaPara = !yaEnviado || !info || info.estado === 'pendiente_revision' || info.estado === 'desconocido';
+    const paraActual = d.vicaria_para || (info && info.para) || '';
+    const paraSugerido = paraActual || Almacen.leer('vicaria.para', '') || estado.config.vicariaEmail || '';
     const m = modal(`<h3>Enviar a Vicaría <em class="beta">beta</em></h3>
       <p>Se enviará el <strong>expediente matrimonial completo</strong> de <strong>${esc(quienes(r))}</strong>: datos de los novios, exámenes de los novios y los testigos y diligencias.</p>
+      ${cambiaPara ? `<div class="campo vic-para"><label for="vicPara">Enviar a (correo de la Vicaría)</label>
+          <input type="email" id="vicPara" value="${esc(paraSugerido)}" placeholder="vicaria@ejemplo.org" autocomplete="email">
+          <small class="nota">Lo verá quien entre en <a href="vicaria/" target="_blank" rel="noopener">Expedientes Vicaría</a> con esa cuenta de Google (o a quien ella dé acceso). ${estado.config.vicariaEmail ? '' : 'Puedes dejarlo fijo en Datos de la parroquia → Vicaría → Email.'}</small></div>`
+        : `<p class="nota">Va a <strong>${esc(paraActual || '—')}</strong>.</p>`}
       ${yaEnviado ? `<p class="nota">Ya se envió el ${esc(fechaHora(d.vicaria_enviado))}. Se mandarán los datos actuales en su lugar; las notas de la Vicaría se conservan.</p>` : ''}
       ${prueba ? '<p class="nota"><strong>Modo de prueba:</strong> se guarda solo en este navegador. <button type="button" class="btn enlace" data-quitar-prueba>Desactivar</button></p>' : ''}
       <div class="fila" style="justify-content:flex-end"><button class="btn" data-cerrar>Cancelar</button><button class="btn prim" data-confirmar>${yaEnviado ? 'Volver a enviar' : 'Enviar a la Vicaría'}</button></div>`);
     m.querySelector('[data-quitar-prueba]')?.addEventListener('click', () => { VicariaServicio.activarPrueba(false); m.remove(); aviso('Modo de prueba desactivado.'); });
+    m.querySelector('#vicPara')?.focus();
     m.querySelector('[data-confirmar]').addEventListener('click', async e => {
-      const b = e.currentTarget; b.disabled = true; b.textContent = 'Enviando…';
-      try { await enviar(r); m.remove(); }
+      const b = e.currentTarget, campo = m.querySelector('#vicPara');
+      const para = campo ? campo.value.trim().toLowerCase() : paraActual;
+      if (campo && !/^[^\s@,;<>"]+@[^\s@,;<>"]+\.[a-z]{2,}$/.test(para)) { aviso('Escribe el correo de la Vicaría al que va el expediente.'); campo.focus(); return; }
+      b.disabled = true; b.textContent = 'Enviando…';
+      try { await enviar(r, para); m.remove(); }
       catch (err) { console.error(err); b.disabled = false; b.textContent = 'Reintentar'; aviso('No se pudo enviar: ' + err.message, 6000); }
     });
   }
-  async function enviar(r) {
+  async function enviar(r, para) {
     const cfg = estado.config, e = enlace(r), f = firmante(), g = Google.estado();
     const clave = e ? e.clave : VicariaServicio.nuevaClave();
     const res = await VicariaServicio.enviar({
       clave, id: e ? e.id : undefined,
       envio: {
-        datos: datosEnvio(r), fechaDocumento: estado.fechaDocumento,
+        para, datos: datosEnvio(r), fechaDocumento: estado.fechaDocumento,
         firmante: { nombre: f.nombre || '', cargo: f.cargo || '' },
         parroquia: { nombre: cfg.nombre, nombreCorto: cfg.nombreCorto, direccion: cfg.direccion, localidad: cfg.localidad, cp: cfg.cp, provincia: cfg.provincia, diocesis: cfg.diocesis, web: cfg.web, vicaria: cfg.vicaria, email: (g.usuario && g.usuario.email) || '' },
       },
     });
-    Object.assign(r.datos, { vicaria_id: res.id, vicaria_clave: clave, vicaria_enviado: ahora() });
-    S().estados[res.id] = { estado: res.estado, version: res.version, pendientes: 0 };
+    Object.assign(r.datos, { vicaria_id: res.id, vicaria_clave: clave, vicaria_enviado: ahora(), vicaria_para: res.para || para || '' });
+    if (para) Almacen.guardar('vicaria.para', para);
+    S().estados[res.id] = { estado: res.estado, version: res.version, pendientes: 0, para: res.para || para };
     Almacen.guardar('vicaria.estados', S().estados);
     if (r.id === estado.actualId) guardarRegistro();
     else { r.actualizado = ahora(); Almacen.guardar('registros', registrosGuardables()); Google.cambiado('registros'); }
-    aviso(e ? 'Expediente actualizado en la Vicaría.' : 'Expediente enviado a la Vicaría.');
+    aviso(e ? 'Expediente actualizado en la Vicaría.' : `Expediente enviado a ${res.para || para}.`);
     render();
   }
 
@@ -135,7 +150,7 @@ const Vicaria = (() => {
     const devuelto = info && info.estado === 'revisado_parroquia';
     return `<div class="grupo-acc grupo-vicaria" id="grupoVicaria"><span>${ICV.vicaria}Vicaría <em class="beta">beta</em></span>
       ${e ? `<div class="vic-estado vic-${est ? est.id : 'aprobacion'}">${esc(est ? est.nombre : 'Enviado')}</div>
-             <small class="vic-enviado">Enviado el ${esc(fechaHora(r.datos.vicaria_enviado))}</small>` : ''}
+             <small class="vic-enviado">Enviado el ${esc(fechaHora(r.datos.vicaria_enviado))}${r.datos.vicaria_para || (info && info.para) ? ` a ${esc(r.datos.vicaria_para || info.para)}` : ''}</small>` : ''}
       ${e && !['pendiente_revision', 'devuelto_parroquia', 'desconocido'].includes(info && info.estado) && info ? '' :
         `<button class="acc ${e ? '' : 'prim'}" data-vic="enviar">${ICV.enviar}<span>Enviar a Vicaría (beta)<small>${e ? 'Volver a enviar los datos actuales' : 'El expediente completo'}</small></span></button>`}
       ${e ? `<button class="acc ${devuelto ? 'rojo' : ''}" data-vic="abrir">${ICV.revision}<span>${devuelto ? 'Revisión' : 'Ver revisión'}<small>${devuelto ? 'Notas y rectificaciones de la Vicaría' : 'Notas de la Vicaría y estado'}</small></span></button>` : ''}
