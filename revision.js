@@ -38,7 +38,8 @@ const Vicaria = (() => {
   /* ---------- Enviar ---------- */
   function datosEnvio(r) {
     const d = {};
-    Object.entries(r.datos).forEach(([k, v]) => { if (!/^vicaria_/.test(k) && v != null && v !== '') d[k] = String(v); });
+    // van también las firmas a distancia (fd_novio, fd_novia, fd_t1, fd_t2), pero no sus enlaces secretos
+    Object.entries(r.datos).forEach(([k, v]) => { if (!/^vicaria_/.test(k) && !/^fd_.+_(token|enviada|caducado|email)$/.test(k) && v != null && v !== '') d[k] = String(v); });
     return d;
   }
   function modal(html, clase = '') {
@@ -96,7 +97,8 @@ const Vicaria = (() => {
       clave, id: e ? e.id : undefined,
       envio: {
         para, datos: datosEnvio(r), fechaDocumento: estado.fechaDocumento,
-        firmante: { nombre: f.nombre || '', cargo: f.cargo || '' },
+        firmante: { nombre: f.nombre || '', cargo: f.cargo || '', firma: f.firma || '' },   // con su firma escaneada
+        sello: cfg.sello || '',
         parroquia: { nombre: cfg.nombre, nombreCorto: cfg.nombreCorto, direccion: cfg.direccion, localidad: cfg.localidad, cp: cfg.cp, provincia: cfg.provincia, diocesis: cfg.diocesis, web: cfg.web, vicaria: cfg.vicaria, email: (g.usuario && g.usuario.email) || '' },
       },
     });

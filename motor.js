@@ -385,14 +385,16 @@ const Motor = {
     filas.forEach((f, i) => ops.push(Object.assign(this.texto(f, x, base - 0.21 * sz + i * ld, sz, { color, negrita }), k ? { k } : {})));
   },
 
-  async maquetarExpediente(d, ctx, parte = 'todo') {
+  async maquetarExpediente(d, ctx, parte = 'todo', conFirma = true) {
     const cfg = ctx.config, f = ctx.firmante || {}, E = EXPEDIENTE;
     const corta = v => H.fechaCorta(v);
+    const firmasParroco = [];   // dónde va la firma escaneada del firmante y el sello
     const firma = (ops, pos, tam = 10) => {
       if (!pos) return;
       const [, x, base] = pos.length === 3 ? pos : [0, pos[0], pos[1]];
       if (f.nombre) ops.push(this.texto(f.nombre, x, base - 0.21 * tam, tam, { alinear: 'centro', color: '#707070' }));
       if (f.cargo) ops.push(this.texto(f.cargo, x, base - 0.21 * tam + tam + 1, tam, { alinear: 'centro', color: '#707070' }));
+      firmasParroco.push({ ops, x, base: base - 0.21 * tam, tam });
     };
     const paginas = {};
     const pagina = n => (paginas[n] = paginas[n] || []);
@@ -458,7 +460,7 @@ const Motor = {
       const fd = d['fd_' + quien], pos = E.examen[quien].firma;
       if (!fd || !pos) continue;
       const o = pagina(pos[0]);
-      const im = await this.encajar(fd, pos[1] - 80, pos[2] - 82, 160, 52);
+      const im = await this.encajar(fd, pos[1] - 80, pos[2] - 83, 160, 44);
       if (im) o.push(im);
       const fecha = String(d['fd_' + quien + '_fecha'] || '').slice(0, 10);
       if (fecha) o.push(this.texto(H.fechaCorta(fecha), pos[1] + 92, pos[2] - 52, 9, { color: '#1b2559' }));
@@ -481,8 +483,8 @@ const Motor = {
         this.dato(o, primera[0], [408, 276, 548], { k: 'dispensa_motivo' });
         this.dato(o, primera.slice(1).join(' '), [68, 290, 548], { k: 'dispensa_motivo' });
       }
-      firma(o, [302.5, 203.7], 8);
-      firma(o, [469.5, 316.7], 8);
+      // firma y sello del párroco: en las proclamas (arriba) o en la dispensa (abajo), según lo que se haga
+      if (AMON.dispensa(d)) firma(o, [469.5, 316.7], 8); else firma(o, [302.5, 203.7], 8);
       if (d.otra_parroquia) {
         this.dato(o, d.otra_parroquia, [364, 460, 548, 2, 11], { k: 'otra_parroquia' });
         this.dato(o, d.motivo_otra_parroquia, [257, 488, 548], { k: 'motivo_otra_parroquia' });
@@ -501,6 +503,13 @@ const Motor = {
         this.dato(o, f ? MESES[+f[2] - 1] : '', [170, 648, 240], kf);
         this.dato(o, f ? f[1] : '', [257, 648, 328], kf);
       }
+    }
+
+    // Firma escaneada del firmante (su tercio inferior pisa el nombre) y, a su izquierda, el sello
+    if (conFirma) for (const z of firmasParroco) {
+      const g = z.tam / 10;   // en la última página los huecos son más pequeños
+      if (cfg.sello) { const s = await this.encajar(cfg.sello, z.x - 165 * g, z.base - 52 * g, 70 * g, 70 * g); if (s) z.ops.unshift(s); }
+      if (f.firma) { const im = await this.encajar(f.firma, z.x - 70 * g, z.base - 60 * g, 140 * g, 50 * g); if (im) { im.y = z.base + 5 * g - im.h; z.ops.push(im); } }
     }
 
     const parteDef = E.partes.find(p => p.id === parte) || E.partes[0];
@@ -675,7 +684,7 @@ const Motor = {
     const cfg = ctx.config;
     const doc = cert.documento(datos, ctx);
     if (doc.formato === 'alegato') return this.maquetarAlegato(datos, ctx);
-    if (doc.formato === 'expediente') return this.maquetarExpediente(datos, ctx, ctx.parteExpediente);
+    if (doc.formato === 'expediente') return this.maquetarExpediente(datos, ctx, ctx.parteExpediente, conFirma);
     if (doc.formato === 'edicto') return this.maquetarEdicto(ctx, conFirma);
     if (doc.formato === 'cursillo_lote') return this.maquetarCursillo(ctx, conFirma);
     if (doc.formato === 'registro_civil') return this.maquetarRegistroCivil(datos, ctx, conFirma);

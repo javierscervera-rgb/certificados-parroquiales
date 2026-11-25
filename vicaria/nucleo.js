@@ -147,6 +147,15 @@ var VIC = (function () {
   };
   var LARGO = 4000;
   function texto(v) { return String(v == null ? '' : v).slice(0, LARGO); }
+  // Imágenes (firmas escaneadas o hechas en el móvil, sello): se guardan enteras si son una imagen válida y no muy grande
+  function imagen(v, max) {
+    var s = String(v == null ? '' : v);
+    return /^data:image\/(png|jpe?g);base64,[A-Za-z0-9+\/=]+$/.test(s) && s.length <= (max || 300000) ? s : '';
+  }
+  function firmanteDe(f) {
+    f = f && typeof f === 'object' ? f : {};
+    return { nombre: texto(f.nombre).slice(0, 300), cargo: texto(f.cargo).slice(0, 300), firma: imagen(f.firma, 400000) };
+  }
   // Identificador de una marca nueva: el que propone quien la crea (así coincide en su pantalla) si es válido y no se repite
   function nuevoId(exp, o, util) {
     if (typeof o.nid === 'string' && /^[a-z0-9]{6,32}$/i.test(o.nid)) {
@@ -199,7 +208,7 @@ var VIC = (function () {
         var vic = {}, x;
         for (x in exp.datos) if (/^vic_/.test(x)) vic[x] = exp.datos[x];
         var nuevos = {};
-        for (x in o.datos || {}) if (!/^vic_/.test(x)) nuevos[x] = texto(o.datos[x]);
+        for (x in o.datos || {}) if (!/^vic_/.test(x)) nuevos[x] = /^data:image\//.test(String(o.datos[x])) ? imagen(o.datos[x], 200000) : texto(o.datos[x]);
         for (x in vic) nuevos[x] = vic[x];
         exp.datos = nuevos;
       }
@@ -226,7 +235,7 @@ var VIC = (function () {
       id: util.id(), version: 1, llegada: ahora, actualizado: ahora, estado: 'pendiente_revision',
       para: correo(envio.para),
       historial: [{ fecha: ahora, estado: 'pendiente_revision', de: 'parroquia' }],
-      parroquia: envio.parroquia || {}, firmante: envio.firmante || {}, fechaDocumento: envio.fechaDocumento || '',
+      parroquia: envio.parroquia || {}, firmante: firmanteDe(envio.firmante), sello: imagen(envio.sello, 600000), fechaDocumento: envio.fechaDocumento || '',
       datos: {}, marcas: {}, resueltas: {},
     };
     aplicar(exp, [{ op: 'datos', datos: envio.datos || {} }], 'parroquia', util);
@@ -328,7 +337,8 @@ var VIC = (function () {
             if (CAMBIAN_PARROQUIA.indexOf(e.estado) < 0) throw new Error('La Vicaría ya ha revisado este expediente: no se puede volver a enviar.' + (e.estado === 'revisado_parroquia' ? ' Responde desde «Revisión».' : ''));
             exp = A.leer(p.id);
             aplicar(exp, [{ op: 'datos', datos: envio.datos }], 'parroquia', A.util);
-            exp.parroquia = envio.parroquia; exp.firmante = envio.firmante || exp.firmante; exp.fechaDocumento = envio.fechaDocumento || exp.fechaDocumento;
+            exp.parroquia = envio.parroquia; exp.firmante = envio.firmante ? firmanteDe(envio.firmante) : exp.firmante; exp.fechaDocumento = envio.fechaDocumento || exp.fechaDocumento;
+            if (envio.sello !== undefined) exp.sello = imagen(envio.sello, 600000);
             // mientras nadie lo ha revisado, la parroquia puede cambiar a quién va
             if (para && exp.estado === 'pendiente_revision') exp.para = para;
             exp.historial.push({ fecha: A.util.ahora(), estado: exp.estado, de: 'parroquia', reenvio: true });

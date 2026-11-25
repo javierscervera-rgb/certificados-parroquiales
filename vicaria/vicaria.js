@@ -497,7 +497,7 @@ function leerImagen(file) {
 const PLIEGOS = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, null]];
 function ctxImpreso(paraRevision) {
   const e = V.exp;
-  return { config: e.parroquia || {}, firmante: e.firmante || {}, fechaDocumento: e.fechaDocumento || (e.llegada || '').slice(0, 10), parteExpediente: 'todo', vicaria: paraRevision };
+  return { config: Object.assign({}, e.parroquia || {}, e.sello ? { sello: e.sello } : {}), firmante: e.firmante || {}, fechaDocumento: e.fechaDocumento || (e.llegada || '').slice(0, 10), parteExpediente: 'todo', vicaria: paraRevision };
 }
 async function prepararPaginas() {
   const res = await Motor.maquetarExpediente(VIC.datosEfectivos(V.exp), ctxImpreso(true), 'todo');
