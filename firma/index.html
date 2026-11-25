@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#F4EEE4">
+<title>Firma · Certificados parroquiales</title>
+<style>
+  :root { --fondo: #F4EEE4; --papel: #FFFDF9; --tinta: #2A241D; --suave: #7A6E60; --acento: #B5604A; --borde: #E0D6C8; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--fondo); color: var(--tinta);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-text-size-adjust: 100%; }
+  body { display: flex; flex-direction: column; min-height: 100dvh; }
+  header { padding: 18px 18px 6px; }
+  header small { display: block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--suave); }
+  h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 600; font-size: 24px; margin: 4px 0 0; color: var(--acento); }
+  main { flex: 1; display: flex; flex-direction: column; padding: 8px 18px 18px; gap: 12px; }
+  p { margin: 0; line-height: 1.45; }
+  .nota { font-size: 13px; color: var(--suave); }
+  .lienzo { position: relative; flex: 1; min-height: 220px; background: var(--papel); border: 1.5px dashed var(--borde); border-radius: 14px; touch-action: none; overflow: hidden; }
+  .lienzo canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+  .lienzo .linea { position: absolute; left: 8%; right: 8%; bottom: 26%; border-bottom: 1px solid var(--borde); pointer-events: none; }
+  .lienzo .x { position: absolute; left: 6%; bottom: calc(26% + 4px); color: var(--suave); font-size: 20px; pointer-events: none; }
+  .lienzo .ayuda { position: absolute; left: 0; right: 0; top: 40%; text-align: center; color: #bfb3a3; font-size: 15px; pointer-events: none; transition: opacity .2s; }
+  .botones { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
+  button { font: inherit; font-weight: 600; font-size: 16px; border-radius: 12px; padding: 14px; border: 1.5px solid var(--borde); background: var(--papel); color: var(--tinta); }
+  button.prim { background: var(--acento); border-color: var(--acento); color: #fff; }
+  button:disabled { opacity: .5; }
+  .centro { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 12px; padding: 30px 10px; }
+  .centro .icono { font-size: 44px; }
+  .oculto { display: none !important; }
+</style>
+</head>
+<body>
+<header><small id="parroquia">Certificados parroquiales</small><h1 id="titulo">Firma</h1></header>
+<main id="cargando"><div class="centro"><p class="nota">Cargando…</p></div></main>
+
+<main id="firmar" class="oculto">
+  <p id="texto"></p>
+  <p class="nota">Firma con el dedo dentro del recuadro. Si el móvil está en horizontal tendrás más espacio.</p>
+  <div class="lienzo" id="lienzo"><canvas id="canvas"></canvas><div class="linea"></div><div class="x">✕</div><div class="ayuda" id="ayuda">Firma aquí</div></div>
+  <div class="botones"><button type="button" id="borrar">Borrar</button><button type="button" class="prim" id="enviar" disabled>Enviar firma</button></div>
+</main>
+
+<main id="fin" class="oculto"><div class="centro"><div class="icono" id="finIcono">✓</div><h1 id="finTitulo"></h1><p id="finTexto"></p></div></main>
+
+<script src="../config.js"></script>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const token = new URLSearchParams(location.search).get('t') || location.hash.replace(/^#/, '');
+  const URL_SERVICIO = window.MENSAJES_URL;
+  const llamar = async datos => {
+    const r = await fetch(URL_SERVICIO, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(datos) });
+    return r.json();
+  };
+  const mostrar = id => ['cargando', 'firmar', 'fin'].forEach(x => $(x).classList.toggle('oculto', x !== id));
+  const fin = (icono, titulo, texto) => { $('finIcono').textContent = icono; $('finTitulo').textContent = titulo; $('finTexto').textContent = texto; mostrar('fin'); };
+  const noDisponible = () => fin('🔒', 'Enlace no disponible', 'Este enlace ya no está activo: la firma ya se ha recogido o el enlace ha caducado. Si necesitas firmar, pide a la parroquia que te envíe uno nuevo.');
+
+  /* ---------- Lienzo de firma ---------- */
+  const canvas = $('canvas'), ctx = canvas.getContext('2d');
+  let trazos = [], actual = null, dpr = 1;
+  function ajustar() {
+    const r = canvas.getBoundingClientRect();
+    dpr = Math.max(1, window.devicePixelRatio || 1);
+    canvas.width = Math.round(r.width * dpr); canvas.height = Math.round(r.height * dpr);
+    dibujar();
+  }
+  function dibujar() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#1b2559'; ctx.lineWidth = 2.6;
+    trazos.forEach(t => {
+      ctx.beginPath();
+      if (t.length === 1) { ctx.arc(t[0].x, t[0].y, 1.4, 0, Math.PI * 2); ctx.fillStyle = '#1b2559'; ctx.fill(); return; }
+      ctx.moveTo(t[0].x, t[0].y);
+      for (let i = 1; i < t.length - 1; i++) {
+        const mx = (t[i].x + t[i + 1].x) / 2, my = (t[i].y + t[i + 1].y) / 2;
+        ctx.quadraticCurveTo(t[i].x, t[i].y, mx, my);
+      }
+      ctx.lineTo(t[t.length - 1].x, t[t.length - 1].y);
+      ctx.stroke();
+    });
+    $('ayuda').style.opacity = trazos.length ? 0 : 1;
+    $('enviar').disabled = !trazos.length;
+  }
+  const punto = e => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  canvas.addEventListener('pointerdown', e => { e.preventDefault(); canvas.setPointerCapture(e.pointerId); actual = [punto(e)]; trazos.push(actual); dibujar(); });
+  canvas.addEventListener('pointermove', e => {
+    if (!actual) return; e.preventDefault();
+    (e.getCoalescedEvents ? e.getCoalescedEvents() : [e]).forEach(ev => actual.push(punto(ev)));
+    dibujar();
+  });
+  const soltar = () => { actual = null; };
+  canvas.addEventListener('pointerup', soltar); canvas.addEventListener('pointercancel', soltar);
+  window.addEventListener('resize', () => {
+    // al girar el móvil se reescala la firma para no perderla
+    const r0 = { w: canvas.width / dpr, h: canvas.height / dpr };
+    const r = canvas.getBoundingClientRect();
+    if (r0.w && r0.h && trazos.length) { const k = Math.min(r.width / r0.w, r.height / r0.h); trazos = trazos.map(t => t.map(p => ({ x: p.x * k, y: p.y * k }))); }
+    ajustar();
+  });
+  $('borrar').addEventListener('click', () => { trazos = []; dibujar(); });
+
+  // Firma recortada a su tamaño, con fondo transparente (PNG pequeño)
+  function exportar(maxW = 600, maxH = 240) {
+    const pts = trazos.flat();
+    let x0 = Math.min(...pts.map(p => p.x)), x1 = Math.max(...pts.map(p => p.x));
+    let y0 = Math.min(...pts.map(p => p.y)), y1 = Math.max(...pts.map(p => p.y));
+    const m = 6; x0 -= m; y0 -= m; x1 += m; y1 += m;
+    const w = x1 - x0, h = y1 - y0, k = Math.min(1.5, maxW / w, maxH / h);
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
+    const g = c.getContext('2d');
+    g.setTransform(k, 0, 0, k, -x0 * k, -y0 * k);
+    g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = '#1b2559'; g.fillStyle = '#1b2559'; g.lineWidth = 2.6;
+    trazos.forEach(t => {
+      g.beginPath();
+      if (t.length === 1) { g.arc(t[0].x, t[0].y, 1.4, 0, Math.PI * 2); g.fill(); return; }
+      g.moveTo(t[0].x, t[0].y);
+      for (let i = 1; i < t.length - 1; i++) g.quadraticCurveTo(t[i].x, t[i].y, (t[i].x + t[i + 1].x) / 2, (t[i].y + t[i + 1].y) / 2);
+      g.lineTo(t[t.length - 1].x, t[t.length - 1].y); g.stroke();
+    });
+    return c.toDataURL('image/png');
+  }
+
+  $('enviar').addEventListener('click', async () => {
+    const b = $('enviar'); b.disabled = true; b.textContent = 'Enviando…';
+    try {
+      let firma = exportar();
+      if (firma.length > 46000) firma = exportar(420, 170);
+      if (firma.length > 46000) firma = exportar(300, 120);
+      const r = await llamar({ accion: 'firma_enviar', token, firma });
+      if (r.ok) fin('✓', '¡Gracias!', 'Tu firma ha llegado a la parroquia. Ya puedes cerrar esta página.');
+      else if (r.error === 'no existe') noDisponible();
+      else throw new Error(r.error || 'error');
+    } catch (e) {
+      b.disabled = false; b.textContent = 'Enviar firma';
+      alert('No se pudo enviar la firma. Comprueba la conexión e inténtalo de nuevo.');
+    }
+  });
+
+  /* ---------- Inicio ---------- */
+  (async () => {
+    if (!token || !URL_SERVICIO) return noDisponible();
+    try {
+      const r = await llamar({ accion: 'firma_ver', token });
+      if (!r.ok) return noDisponible();
+      $('parroquia').textContent = r.parroquia || 'Certificados parroquiales';
+      $('titulo').textContent = 'Firma' + (r.nombre ? ' de ' + r.nombre : '');
+      $('texto').textContent = `Firma para el expediente matrimonial (${r.quien || 'firma'}). Con ella confirmas que has leído tus respuestas y estás de acuerdo con ellas.`
+        + (r.firmada ? ' Ya enviaste una firma: si firmas de nuevo, se sustituye.' : '');
+      mostrar('firmar');
+      requestAnimationFrame(ajustar);
+    } catch (e) {
+      fin('⚠️', 'Sin conexión', 'No se ha podido cargar la página. Comprueba la conexión y vuelve a abrir el enlace.');
+    }
+  })();
+})();
+</script>
+</body>
+</html>

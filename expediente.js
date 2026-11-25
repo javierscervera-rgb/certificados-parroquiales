@@ -59,6 +59,7 @@ const EXPEDIENTE = (() => {
       { k: 'nombre', label: 'Nombre', w: 5 }, { k: 'apellidos', label: 'Apellidos', w: 7 },
       { k: 'nac', label: 'Lugar y fecha de nacimiento', w: 7 }, { k: 'dni', label: 'Nº documento identidad', w: 5 },
       { k: 'domicilio', label: 'Domicilio actual', w: 12 },
+      { k: 'email', label: 'Email (para firmar a distancia)', w: 12, tipo: 'email' },
       { k: 'desde', label: '¿Desde cuándo conoce a los contrayentes?' },
       { k: 'trato', label: '¿Qué trato y relación ha tenido y tiene con ellos?' },
     ]},

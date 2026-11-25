@@ -622,3 +622,17 @@ ins { text-decoration: none; color: var(--tinta); font-weight: 600; }
 .vic-para { margin: 4px 0 14px; }
 .vic-para small { display: block; margin-top: 6px; line-height: 1.4; }
 .vic-para a { color: var(--azul); }
+
+/* Firmas a distancia (expediente) */
+.firmas-distancia .nota { margin: 0 0 6px; font-size: 12px; }
+.fd-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.fd-lista li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 8px; padding: 8px 10px; border: 1px solid var(--borde); border-radius: 10px; background: var(--campo); }
+.fd-lista .fd-quien { display: flex; flex-direction: column; min-width: 0; gap: 1px; flex: 1 1 130px; }
+.fd-lista .fd-quien strong { font-size: 13px; }
+.fd-lista .fd-quien span { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fd-lista .fd-quien small { font-size: 11px; color: var(--suave); }
+.fd-lista .btn { flex: none; padding: 6px 10px; font-size: 12px; }
+.fd-lista .fd-firma { max-width: 120px; max-height: 40px; background: #fff; border-radius: 4px; padding: 2px; margin: 3px 0; }
+.fd-lista li.fd-firmado { border-color: #5a9a6a; }
+.fd-lista li.fd-pendiente { border-color: #d29a3a; }
+.fd-lista li.fd-sin-email .fd-quien small { color: #c0392b; }

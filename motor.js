@@ -453,6 +453,17 @@ const Motor = {
       });
     });
 
+    // Firmas a distancia (novio, novia, testigos): bajo «Firma del … y fecha», con la fecha al lado
+    for (const quien of ['novio', 'novia', 't1', 't2']) {
+      const fd = d['fd_' + quien], pos = E.examen[quien].firma;
+      if (!fd || !pos) continue;
+      const o = pagina(pos[0]);
+      const im = await this.encajar(fd, pos[1] - 80, pos[2] - 82, 160, 52);
+      if (im) o.push(im);
+      const fecha = String(d['fd_' + quien + '_fecha'] || '').slice(0, 10);
+      if (fecha) o.push(this.texto(H.fechaCorta(fecha), pos[1] + 92, pos[2] - 52, 9, { color: '#1b2559' }));
+    }
+
     // 11. Diligencias
     {
       const o = pagina(11);

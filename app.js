@@ -107,6 +107,7 @@ function etiquetaCampo(k) {
       m.set(`${t}_res_${i + 1}`, `Testigo ${t[1]} · «${sec.seccion}» resuelto`);
       (sec.preguntas || []).forEach(q => m.set(`${t}_${q.k}`, `Testigo ${t[1]} · ${corto(q.label)}`));
     }));
+    Object.entries({ novio: 'Novio', novia: 'Novia', t1: 'Testigo 1', t2: 'Testigo 2' }).forEach(([q, n]) => { m.set('fd_' + q, `Firma a distancia · ${n}`); m.set(`fd_${q}_fecha`, `Firma a distancia · ${n} · fecha`); m.set(`fd_${q}_enviada`, `Firma a distancia · ${n} · enlace enviado`); });
     m.set('novio_ex_juramento', 'Examen novio · Juramento'); m.set('novia_ex_juramento', 'Examen novia · Juramento');
     m.set('t1_juramento', 'Testigo 1 · Juramento'); m.set('t2_juramento', 'Testigo 2 · Juramento');
     Object.entries({ amon_novio_lugar: 'Amonestaciones novio (aquí/fuera)', amon_novia_lugar: 'Amonestaciones novia (aquí/fuera)',
@@ -1062,6 +1063,7 @@ function vistaExpediente(cert) {
           <button class="acc" data-pdf="1">${IC.guardar}<span>Guardar PDF</span></button>
           <button class="acc" data-correo>${IC.mail}<span>Enviar por mail</span></button>
         </div>
+        ${Firmas.grupoExpediente()}
         ${Vicaria.grupoExpediente()}
         <div class="grupo-acc otros-docs"><span>${IC.pdf}Otros documentos</span>${otros}</div>
       </div>
@@ -1483,6 +1485,7 @@ document.addEventListener('click', async e => {
   if (e.target.closest('summary .resuelto')) { e.stopPropagation(); if (e.target.tagName !== 'INPUT') { e.preventDefault(); e.target.closest('.resuelto').querySelector('input').click(); } return; }
   const t = e.target.closest('button'); if (!t) return;
   if (t.dataset.vic !== undefined) { Vicaria.clic(t); return; }
+  if (t.dataset.fdEnviar || t.dataset.fdQuitar || t.hasAttribute('data-fd-todos')) { Firmas.clic(t); return; }
   if (t.dataset.amonEditar) { editarAmonestacion(t.dataset.amonEditar); return; }
   if (t.dataset.curPasar) {
     const c = cursillo(), nuevas = leerParejas(c.pegado);
@@ -1700,6 +1703,7 @@ window.addEventListener('focus', () => Google.refrescar());
   Google.autoconectar().catch(e => console.error(e));
   // Expedientes enviados a la Vicaría: ¿ha devuelto alguno?
   Vicaria.iniciar();
+  Firmas.iniciar();
   // El script de Google carga aparte: cuando llega, se repinta el indicador
   const espera = setInterval(() => { if (Google.estado().disponible) { clearInterval(espera); pintarChip(); } }, 300);
   setTimeout(() => clearInterval(espera), 15000);

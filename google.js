@@ -418,9 +418,10 @@ const Google = (() => {
       'MIME-Version: 1.0', `Content-Type: multipart/mixed; boundary="${limite}"`, '',
       `--${limite}`, 'Content-Type: text/plain; charset="UTF-8"', 'Content-Transfer-Encoding: base64', '',
       lineas76(b64(utf8(texto))),
-      `--${limite}`, `Content-Type: application/pdf; name="${cabecera(adjunto.nombre)}"`,
-      `Content-Disposition: attachment; filename="${cabecera(adjunto.nombre)}"`, 'Content-Transfer-Encoding: base64', '',
-      lineas76(b64(adjunto.bytes)), `--${limite}--`
+      ...(adjunto ? [`--${limite}`, `Content-Type: application/pdf; name="${cabecera(adjunto.nombre)}"`,
+        `Content-Disposition: attachment; filename="${cabecera(adjunto.nombre)}"`, 'Content-Transfer-Encoding: base64', '',
+        lineas76(b64(adjunto.bytes))] : []),
+      `--${limite}--`
     ].filter(x => x !== null).join('\r\n');
     const raw = btoa(partes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     return api('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
