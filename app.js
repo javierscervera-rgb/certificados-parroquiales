@@ -1321,9 +1321,34 @@ window.addEventListener('wheel', e => {
    En cada pantalla el cursor empieza en el primer campo vacío y el tabulador
    salta de campo en campo (de izquierda a derecha y de arriba abajo), sin
    detenerse en el día, mes y año de las fechas. Varón/Mujer es una sola parada. */
+/* Orden del tabulador (adelante con Tab, atrás con Mayús+Tab): el del formulario, de izquierda a derecha
+   y de arriba abajo; donde hay dos columnas (novio | novia) primero toda la izquierda y luego la derecha.
+   En cada grupo de opciones (Varón/Mujer, Aquí/Fuera) solo cuenta la elegida: las flechas o el espacio la cambian.
+   La casilla «Resuelto» de cada bloque del examen va después de las preguntas de ese bloque. */
 function camposNavegables() {
-  return [...document.querySelectorAll('main .tarjeta input:not([type=file]):not([type=color]):not([type=checkbox]), main .tarjeta select, main .tarjeta textarea, main .tarjeta .sexo button.on')]
-    .filter(el => !el.disabled && el.offsetParent !== null && !el.closest('.tareas, .callejero'));
+  const todos = [...document.querySelectorAll('main .tarjeta input:not([type=file]):not([type=hidden]), main .tarjeta select, main .tarjeta textarea, main .tarjeta .sexo button, main .tarjeta .interruptor')]
+    .filter(el => !el.disabled && el.offsetParent !== null && !el.closest('.tareas, .callejero, .ayuda-trampa'))
+    // lo que está dentro de un bloque plegado no se ve (Chrome no lo quita del todo), salvo su cabecera
+    .filter(el => { const d = el.closest('details'); return !d || d.open || (el.closest('summary') && el.closest('summary').parentElement === d); })
+    .filter(el => {
+      if (!el.matches('.sexo button')) return true;
+      const grupo = [...el.parentElement.querySelectorAll('button')];
+      return el.classList.contains('on') || (!grupo.some(b => b.classList.contains('on')) && el === grupo[0]);
+    });
+  // «Resuelto» al final de su bloque
+  const lista = todos.filter(el => !el.dataset.resuelto);
+  todos.filter(el => el.dataset.resuelto).forEach(chk => {
+    const det = chk.closest('details');
+    let pos = -1;
+    lista.forEach((el, i) => { if (det.contains(el)) pos = i; });
+    if (pos < 0) pos = lista.findIndex(el => det.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) - 1;
+    lista.splice(pos < -1 ? lista.length : pos + 1, 0, chk);
+  });
+  return lista;
+}
+// Tras volver a pintar la pantalla, devuelve el foco al mismo control
+function reenfocar(selector) {
+  requestAnimationFrame(() => { const el = document.querySelector(selector); if (el) el.focus({ preventScroll: true }); });
 }
 function enfocar(el) {
   if (!el) return;
@@ -1343,8 +1368,12 @@ document.addEventListener('keydown', e => {
   const bs = e.target.closest && e.target.closest('.sexo button');
   if (bs && [' ', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
     e.preventDefault();
-    const otro = [...bs.parentElement.querySelectorAll('button')].find(b => b !== bs);
-    otro.click(); otro.focus();
+    const grupo = [...bs.parentElement.querySelectorAll('button')];
+    const paso = ['ArrowLeft', 'ArrowUp'].includes(e.key) ? -1 : 1;
+    const otro = grupo[(grupo.indexOf(bs) + paso + grupo.length) % grupo.length];
+    const opcion = bs.parentElement.dataset.opcion;
+    otro.click();
+    if (opcion) reenfocar(`[data-opcion="${opcion}"] button[data-v="${otro.dataset.v}"]`); else otro.focus();
     return;
   }
   if (e.key !== 'Tab' || e.ctrlKey || e.altKey || e.metaKey) return;
@@ -1354,7 +1383,8 @@ document.addEventListener('keydown', e => {
   const j = i + (e.shiftKey ? -1 : 1);
   if (j >= 0 && j < lista.length) { e.preventDefault(); enfocar(lista[j]); return; }
   if (j >= lista.length) {
-    const siguiente = document.querySelector('[data-imprimir="1"]:not(:disabled)');
+    // del último campo se pasa a los botones de imprimir/guardar (si se ven)
+    const siguiente = [...document.querySelectorAll('.lateral [data-imprimir], .lateral [data-pdf]')].find(b => !b.disabled && b.offsetParent !== null);
     if (siguiente) { e.preventDefault(); siguiente.focus(); }
   }
 });
@@ -1399,7 +1429,7 @@ document.addEventListener('click', async e => {
     }
     return;
   }
-  if (t.dataset.dispensa !== undefined) { estado.registro.dispensa = AMON.dispensa(estado.registro) ? '' : '1'; if (!estado.registro.dispensa) estado.registro.diligencia = ''; guardarRegistro(); render(); return; }
+  if (t.dataset.dispensa !== undefined) { estado.registro.dispensa = AMON.dispensa(estado.registro) ? '' : '1'; if (!estado.registro.dispensa) estado.registro.diligencia = ''; guardarRegistro(); render(); reenfocar('[data-dispensa]'); return; }
   if (t.dataset.tareaBorrar) { if (await confirmar('¿Eliminar esta tarea?', 'Eliminar')) { cambiarTarea(t.dataset.tareaBorrar, { borrada: true }); pintarTareas(); } return; }
   if (t.dataset.tareasLimpiar !== undefined) { (estado.config.tareas || []).filter(x => x.hecha && !x.borrada).forEach(x => Object.assign(x, { borrada: true, actualizado: ahora() })); guardarConfig(); pintarTareas(); return; }
   if (t.hasAttribute('data-modo')) { HSTema.cambiar(); return; }
