@@ -14,4 +14,4 @@ window.MENSAJES_ADMIN = 'sansebastianmartir@gmail.com';
 /* Buzón de la Vicaría (Expedientes Vicaría, beta): dirección de la aplicación web de Apps Script
    publicada desde la cuenta de Google de la Vicaría (código en vicaria/apps-script.gs; pasos en vicaria/README.md).
    Mientras esté vacía, «Enviar a Vicaría» ofrece el modo de prueba (todo se guarda en el navegador). */
-window.VICARIA_URL = '';
+window.VICARIA_URL = 'https://script.google.com/macros/s/AKfycbwxdOtBzby5H9s65CaIANmbrdpGeEtU1-IF4WeuhAekjSYAOsd4OCWyQYpzuPkhddwF/exec';   // buzón de PRUEBA (cuenta javierscervera@gmail.com): cambiar por el de la Vicaría
