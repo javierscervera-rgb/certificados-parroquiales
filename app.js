@@ -90,6 +90,73 @@ function fechaHora(iso) {
   const d = new Date(iso);
   return iso && !isNaN(d) ? d.toLocaleString('es-ES', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'fecha desconocida';
 }
+
+/* Qué campos son distintos entre este ordenador (a) y Google Drive (b), con su contenido */
+let _etiquetas = null;
+function etiquetaCampo(k) {
+  if (!_etiquetas) {
+    const m = _etiquetas = new Map();
+    const corto = t => { t = String(t || '').replace(/\s+/g, ' ').trim(); return t.length > 90 ? t.slice(0, 87) + '…' : t; };
+    CAMPOS_PAREJA.forEach(c => { m.set('novio_' + c.k, 'Novio · ' + c.label); m.set('novia_' + c.k, 'Novia · ' + c.label); });
+    CERTIFICADOS.forEach(cert => (cert.campos || []).forEach(c => { if (c.k && c.label && !m.has(c.k)) m.set(c.k, c.label); }));
+    ['novio', 'novia'].forEach(l => EXPEDIENTE.contrayente(l).forEach((sec, i) => {
+      m.set(`${l}_ex_res_${i + 1}`, `Examen ${l} · «${sec.seccion}» resuelto`);
+      sec.preguntas.forEach(q => m.set(`${l}_ex_${q.k}`, `Examen ${l} · ${corto(q.label)}`));
+    }));
+    ['t1', 't2'].forEach(t => EXPEDIENTE.testigo.forEach((sec, i) => {
+      m.set(`${t}_res_${i + 1}`, `Testigo ${t[1]} · «${sec.seccion}» resuelto`);
+      (sec.preguntas || []).forEach(q => m.set(`${t}_${q.k}`, `Testigo ${t[1]} · ${corto(q.label)}`));
+    }));
+    m.set('novio_ex_juramento', 'Examen novio · Juramento'); m.set('novia_ex_juramento', 'Examen novia · Juramento');
+    m.set('t1_juramento', 'Testigo 1 · Juramento'); m.set('t2_juramento', 'Testigo 2 · Juramento');
+    Object.entries({ amon_novio_lugar: 'Amonestaciones novio (aquí/fuera)', amon_novia_lugar: 'Amonestaciones novia (aquí/fuera)',
+      amon_novio_parroquia: 'Amonestaciones novio · Parroquia', amon_novia_parroquia: 'Amonestaciones novia · Parroquia',
+      amon_novio_desde: 'Amonestaciones novio · Inicio', amon_novio_hasta: 'Amonestaciones novio · Final',
+      amon_novia_desde: 'Amonestaciones novia · Inicio', amon_novia_hasta: 'Amonestaciones novia · Final',
+      dispensa: 'Dispensa de amonestaciones', dispensa_motivo: 'Motivo de la dispensa', sexo: 'Sexo',
+      otra_parroquia: 'Celebración en otra parroquia', motivo_otra_parroquia: 'Motivo (otra parroquia)' }).forEach(([k, v]) => m.set(k, v));
+    Object.entries({ nombre: 'Nombre de la parroquia', nombreCorto: 'Nombre abreviado', direccion: 'Dirección', cp: 'C.P.', localidad: 'Localidad',
+      provincia: 'Provincia', diocesis: 'Diócesis', web: 'Web', color: 'Color del membrete', papa: 'Papa', logo: 'Logo', sello: 'Sello',
+      logoDiocesis: 'Logo de la diócesis', diocesisTitulo: 'Arzobispado / Obispado', vicaria: 'Vicaría', vicario: 'Vicario', vicarioCargo: 'Cargo del vicario',
+      vicariaTelefono: 'Teléfono de la vicaría', vicariaCalle: 'Calle de la vicaría', vicariaNumero: 'Número', vicariaCP: 'C.P. de la vicaría',
+      vicariaCiudad: 'Ciudad de la vicaría', vicariaEmail: 'Email de la vicaría' }).forEach(([k, v]) => { if (!m.has('cfg:' + k)) m.set('cfg:' + k, v); });
+  }
+  return _etiquetas.get(k) || String(k).replace(/^cfg:/, '').replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
+}
+function valorLegible(v) {
+  if (v === undefined || v === null || v === '') return '';
+  if (typeof v === 'string' && v.startsWith('data:image')) return '(imagen)';
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) return H.fecha(v);
+  if (typeof v === 'object') return JSON.stringify(v).slice(0, 200);
+  return String(v);
+}
+function diferencias(tipo, a, b) {
+  const lista = [];
+  const comparar = (k, x, y, etiqueta) => {
+    if (JSON.stringify(x ?? '') === JSON.stringify(y ?? '')) return;
+    if (/_res_\d+$|^dispensa$/.test(k)) { x = x === '1' ? 'Sí' : ''; y = y === '1' ? 'Sí' : ''; }
+    const imagen = [x, y].some(v => typeof v === 'string' && v.startsWith('data:image'));
+    lista.push({ campo: etiqueta || etiquetaCampo(k), aqui: imagen && x ? (y ? 'Imagen distinta' : '(imagen)') : valorLegible(x), drive: imagen && y ? (x ? 'Imagen distinta' : '(imagen)') : valorLegible(y) });
+  };
+  if (tipo === 'config') {
+    const fuera = ['tareas', 'amonestaciones', 'eliminados', 'modificado', 'firmas'];
+    const claves = new Set([...Object.keys(a || {}), ...Object.keys(b || {})].filter(k => !fuera.includes(k)));
+    claves.forEach(k => comparar(k, (a || {})[k], (b || {})[k], etiquetaCampo('cfg:' + k)));
+    const fa = (a && a.firmas) || [], fb = (b && b.firmas) || [];
+    for (let i = 0; i < Math.max(fa.length, fb.length); i++) {
+      const x = fa[i] || {}, y = fb[i] || {};
+      const quien = x.nombre || y.nombre || `Firmante ${i + 1}`;
+      if (!fa[i] || !fb[i]) { lista.push({ campo: `Firmante ${i + 1}`, aqui: fa[i] ? `${x.nombre || ''} — ${x.cargo || ''}` : '', drive: fb[i] ? `${y.nombre || ''} — ${y.cargo || ''}` : '' }); continue; }
+      [['nombre', 'nombre'], ['cargo', 'cargo'], ['firma', 'firma escaneada']].forEach(([k, n]) => comparar(k, x[k], y[k], `Firmante «${quien}» · ${n}`));
+    }
+  } else {
+    const da = (a && a.datos) || {}, db = (b && b.datos) || {};
+    const orden = [...new Set([...Object.keys(da), ...Object.keys(db)])];
+    orden.filter(k => !/^(sexo_manual|feligres)$/.test(k)).forEach(k => comparar(k, da[k], db[k]));
+  }
+  return lista;
+}
+
 function elegirConflictos(lista) {
   return new Promise(res => {
     const elegido = {};
@@ -102,16 +169,23 @@ function elegirConflictos(lista) {
           <button type="button" class="cf-op" data-elige="aqui"><strong>Este ordenador</strong><span>Modificado: ${esc(fechaHora(c.aqui))}</span></button>
           <button type="button" class="cf-op" data-elige="drive"><strong>Google Drive</strong><span>Modificado: ${esc(fechaHora(c.drive))}</span></button>
         </div>
+        ${(c.cambios || []).length ? `<div class="cf-cambios"><div class="cf-cab">${c.cambios.length} campo${c.cambios.length === 1 ? ' distinto' : 's distintos'}</div><div class="cf-lado">Este ordenador</div><div class="cf-lado">Google Drive</div>
+          ${c.cambios.map(d => `<div class="cf-campo">${esc(d.campo)}</div>
+            <div class="cf-valor" data-lado="aqui">${d.aqui ? esc(d.aqui) : '<em>vacío</em>'}</div>
+            <div class="cf-valor" data-lado="drive">${d.drive ? esc(d.drive) : '<em>vacío</em>'}</div>`).join('')}</div>` : ''}
       </li>`;
     m.innerHTML = `<div class="caja">
       <h3>Datos distintos aquí y en Google Drive</h3>
-      <p>${lista.length === 1 ? 'Este dato se ha cambiado' : 'Estos datos se han cambiado'} en este ordenador y también en Google Drive (desde otro ordenador) desde la última vez que se sincronizaron. Elige qué versión se queda en cada caso; la otra se descartará.</p>
+      <p>${lista.length === 1 ? 'Este dato se ha cambiado' : 'Estos datos se han cambiado'} en este ordenador y también en Google Drive (desde otro ordenador) desde la última vez que se sincronizaron. Debajo de cada uno ves qué campos son distintos y lo que pone en cada sitio. Elige qué versión se queda; la otra se descartará.</p>
       <ul class="cf-lista">${lista.map(fila).join('')}</ul>
       ${lista.length > 1 ? `<div class="fila cf-todos"><button type="button" class="btn" data-todos="aqui">Todo de este ordenador</button><button type="button" class="btn" data-todos="drive">Todo de Google Drive</button></div>` : ''}
       <div class="fila" style="justify-content:flex-end"><button type="button" class="btn prim" data-aceptar disabled>Aceptar</button></div>
     </div>`;
     const pintar = () => {
-      m.querySelectorAll('.cf-lista li').forEach(li => li.querySelectorAll('.cf-op').forEach(b => b.classList.toggle('on', elegido[li.dataset.id] === b.dataset.elige)));
+      m.querySelectorAll('.cf-lista li').forEach(li => {
+        li.querySelectorAll('.cf-op').forEach(b => b.classList.toggle('on', elegido[li.dataset.id] === b.dataset.elige));
+        li.querySelectorAll('.cf-valor').forEach(v => { v.classList.toggle('on', elegido[li.dataset.id] === v.dataset.lado); v.classList.toggle('fuera', !!elegido[li.dataset.id] && elegido[li.dataset.id] !== v.dataset.lado); });
+      });
       m.querySelector('[data-aceptar]').disabled = lista.some(c => !elegido[c.id]);
     };
     m.addEventListener('click', e => {
@@ -156,6 +230,7 @@ Google.usarProveedor({
   // Un ordenador que nunca ha tocado los datos de la parroquia no compite con los de Drive
   configSinTocar: c => !c.modificado && huellaConfig(c) === huellaConfig(Object.assign(structuredClone(CONFIG_DEFECTO), { eliminados: c.eliminados, tareas: c.tareas, amonestaciones: c.amonestaciones })),
   resolverConflictos: lista => elegirConflictos(lista),
+  diferencias: (tipo, a, b) => diferencias(tipo, a, b),
   aplicarDatos: (config, registros) => {
     // los registros eliminados en cualquier ordenador no vuelven
     const eliminados = [...new Set([...(estado.config.eliminados || []), ...(config.eliminados || [])])];

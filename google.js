@@ -275,7 +275,7 @@ const Google = (() => {
         else if (hl !== hr && !proveedor.configSinTocar(local.config)) {
           if (base.config && hl === base.config) configLocalGana = false;                 // solo cambió Drive
           else if (base.config && hr === base.config) configLocalGana = true;             // solo cambió este ordenador
-          else conflictos.push({ tipo: 'config', id: 'config', titulo: 'Datos de la parroquia y firmantes', aqui: local.config.modificado, drive: remota.modificado });
+          else conflictos.push({ tipo: 'config', id: 'config', titulo: 'Datos de la parroquia y firmantes', aqui: local.config.modificado, drive: remota.modificado, _l: local.config, _r: remota });
         }
       }
     } else {
@@ -288,7 +288,7 @@ const Google = (() => {
       st.resolviendo = true;
       fijarEstado('conectando', 'Hay datos distintos aquí y en Google Drive: elige cuáles se quedan');
       let elecciones;
-      try { elecciones = await proveedor.resolverConflictos(conflictos.map(({ _l, _r, ...c }) => c)); }
+      try { elecciones = await proveedor.resolverConflictos(conflictos.map(({ _l, _r, ...c }) => ({ ...c, cambios: proveedor.diferencias ? proveedor.diferencias(c.tipo, _l, _r) : [] }))); }
       finally { st.resolviendo = false; }
       conflictos.forEach(c => {
         const queda = elecciones[c.id] === 'aqui' ? 'aqui' : 'drive';
