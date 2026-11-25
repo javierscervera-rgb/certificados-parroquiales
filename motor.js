@@ -356,19 +356,23 @@ const Motor = {
 
   /* ---------- EXPEDIENTE MATRIMONIAL: datos sobre el impreso oficial ---------- */
   _fondos: new Map(),
+  rutaBase: '',   // la web de la Vicaría (vicaria/) usa '../' para llegar a fondos/
   async fondo(n, impreso = 'expediente') {
     const clave = impreso + n;
     if (this._fondos.has(clave)) return this._fondos.get(clave);
-    const p = fetch(`fondos/${impreso}-${String(n).padStart(2, '0')}.jpg`).then(r => r.blob()).then(b => new Promise(res => {
+    const p = fetch(`${this.rutaBase}fondos/${impreso}-${String(n).padStart(2, '0')}.jpg`).then(r => r.blob()).then(b => new Promise(res => {
       const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(b);
     }));
     this._fondos.set(clave, p);
     return p;
   },
 
-  // Escribe un dato en gris en su sitio; si no cabe, reduce la letra y, si puede, usa más líneas
-  dato(ops, valor, pos, { tam = 10, color = '#707070', negrita = false, minTam = 6.5 } = {}) {
+  // Escribe un dato en gris en su sitio; si no cabe, reduce la letra y, si puede, usa más líneas.
+  // k: clave (o claves separadas por espacios) del dato. Marca su sitio con una «zona» que no se dibuja
+  // ni se imprime: la usa la revisión de la Vicaría para señalar y anotar cada dato sobre el impreso.
+  dato(ops, valor, pos, { tam = 10, color = '#707070', negrita = false, minTam = 6.5, k } = {}) {
     const t = String(valor ?? '').replace(/\s+/g, ' ').trim();
+    if (k && pos) { const [zx, zb, zx1 = 548, zl = 1, zld = 11] = pos; ops.push({ tipo: 'zona', k, x: zx, y: zb - tam - 1, w: zx1 - zx, h: tam + 4 + (zl - 1) * zld }); }
     if (!t || !pos) return;
     const [x, base, x1 = 548, lineas = 1, ld = 11] = pos;
     let sz = tam, filas;
@@ -378,7 +382,7 @@ const Motor = {
       sz -= 0.5;
     }
     if (filas.length > lineas) { filas = filas.slice(0, lineas); filas[lineas - 1] = filas[lineas - 1].replace(/.{0,2}$/, '…'); }
-    filas.forEach((f, i) => ops.push(this.texto(f, x, base - 0.21 * sz + i * ld, sz, { color, negrita })));
+    filas.forEach((f, i) => ops.push(Object.assign(this.texto(f, x, base - 0.21 * sz + i * ld, sz, { color, negrita }), k ? { k } : {})));
   },
 
   async maquetarExpediente(d, ctx, parte = 'todo') {
@@ -396,12 +400,16 @@ const Motor = {
     // 1. Portada
     {
       const o = pagina(1), j = (...a) => a.filter(x => x && String(x).trim()).join(' ');
-      const linea = (t, base) => o.push(this.texto(t, 301.5, base - 3.8, 18, { alinear: 'centro', color: '#000000' }));
-      linea('Don ' + j(d.novio_nombre, d.novio_apellido1 || d.novio_apellidos), 448.8);
+      const linea = (t, base, k) => {
+        const op = this.texto(t, 301.5, base - 3.8, 18, { alinear: 'centro', color: '#000000' });
+        if (k) { op.k = k; const w = this.ancho(op.t, 18); o.push({ tipo: 'zona', k, x: 301.5 - w / 2, y: base - 21, w, h: 22 }); }
+        o.push(op);
+      };
+      linea('Don ' + j(d.novio_nombre, d.novio_apellido1 || d.novio_apellidos), 448.8, 'novio_nombre novio_apellido1');
       linea('y', 469.8);
-      linea('Doña ' + j(d.novia_nombre, d.novia_apellido1 || d.novia_apellidos), 490.8);
-      if (d.novio_telefono) o.push(this.texto(d.novio_telefono, 477, 440, 12, { color: '#707070' }));
-      if (d.novia_telefono) o.push(this.texto(d.novia_telefono, 477, 483, 12, { color: '#707070' }));
+      linea('Doña ' + j(d.novia_nombre, d.novia_apellido1 || d.novia_apellidos), 490.8, 'novia_nombre novia_apellido1');
+      this.dato(o, d.novio_telefono, [477, 442.52, 590], { tam: 12, k: 'novio_telefono' });
+      this.dato(o, d.novia_telefono, [477, 485.52, 590], { tam: 12, k: 'novia_telefono' });
       const etiqueta = (t, x, base) => {
         const ancho = this.ancho(t, 14, true), punto = this.ancho('.', 14, true);
         o.push(this.texto(t + '.'.repeat(Math.max(0, Math.floor((484.6 - x - ancho) / punto))), x, base - 3, 14, { negrita: true, color: '#000000' }));
@@ -410,13 +418,11 @@ const Motor = {
       o.push(this.texto('AÑO.......................NÚMERO DE EXPEDIENTE ...............................', 64.6, 594, 14, { negrita: true, color: '#000000' }));
       this.dato(o, (cfg.nombre || '').replace(/^parroquia( de)?\s+/i, ''), [155, 547, 480], { tam: 14, color: '#000000' });
       this.dato(o, cfg.localidad, [137, 571, 480], { tam: 14, color: '#000000' });
-      if (d.num_expediente) {
-        this.dato(o, (/^(\d{4})/.exec(ctx.fechaDocumento || '') || [])[1], [105, 595, 190], { tam: 14, color: '#000000' });
-        this.dato(o, d.num_expediente, [400, 595, 487], { tam: 14, color: '#000000' });
-      }
+      if (d.num_expediente) this.dato(o, (/^(\d{4})/.exec(ctx.fechaDocumento || '') || [])[1], [105, 595, 190], { tam: 14, color: '#000000' });
+      this.dato(o, d.num_expediente, [400, 595, 487], { tam: 14, color: '#000000', k: 'num_expediente' });
       o.push(this.texto('DOCUMENTOS QUE SE ADJUNTAN', 301.5, 657, 20, { negrita: true, alinear: 'centro', color: '#000000' }));
       String(d.documentos ?? E.DOCUMENTOS).split('\n').filter(x => x.trim()).slice(0, 8)
-        .forEach((l, i) => this.dato(o, l, [52.3, 697.5 + i * 14, 470], { tam: 12 }));
+        .forEach((l, i) => this.dato(o, l, [52.3, 697.5 + i * 14, 470], { tam: 12, k: 'documentos' }));
     }
 
     // 2. Datos de los contrayentes
@@ -428,13 +434,14 @@ const Motor = {
         const v = d[l + '_' + k];
         return /^f_/.test(k) ? corta(v) : v;
       };
+      const clave = (k, l) => k === 'padre' || k === 'madre' ? `${l}_${k}_nombre ${l}_${k}_apellidos` : `${l}_${k}`;
       Object.entries(E.datos).forEach(([k, [izq, der]]) => {
-        this.dato(o, valor(k, 'novio'), [izq[0], izq[1], izq[2] || 300, izq[3], izq[4]]);
-        this.dato(o, valor(k, 'novia'), [der[0], der[1], der[2] || 548, der[3], der[4]]);
+        this.dato(o, valor(k, 'novio'), [izq[0], izq[1], izq[2] || 300, izq[3], izq[4]], { k: clave(k, 'novio') });
+        this.dato(o, valor(k, 'novia'), [der[0], der[1], der[2] || 548, der[3], der[4]], { k: clave(k, 'novia') });
       });
-      this.dato(o, [d.parroquia_cursillo, d.fecha_cursillo].filter(Boolean).join(', '), [74, 649, 548]);
-      this.dato(o, [d.parroquia_boda, corta(d.f_mat)].filter(Boolean).join(', '), [74, 679, 548]);
-      this.dato(o, d.domicilio_boda, [74, 710, 548]);
+      this.dato(o, [d.parroquia_cursillo, d.fecha_cursillo].filter(Boolean).join(', '), [74, 649, 548], { k: 'parroquia_cursillo fecha_cursillo' });
+      this.dato(o, [d.parroquia_boda, corta(d.f_mat)].filter(Boolean).join(', '), [74, 679, 548], { k: 'parroquia_boda f_mat' });
+      this.dato(o, d.domicilio_boda, [74, 710, 548], { k: 'domicilio_boda' });
     }
 
     // 3-10. Exámenes de los contrayentes y de los testigos
@@ -442,7 +449,7 @@ const Motor = {
       Object.entries(E.examen[quien]).forEach(([k, pos]) => {
         const o = pagina(pos[0]);
         if (k === 'firma') return firma(o, pos);
-        this.dato(o, d[pref + k], pos.slice(1));
+        this.dato(o, d[pref + k], pos.slice(1), { k: pref + k });
       });
     });
 
@@ -454,20 +461,34 @@ const Motor = {
         const lados = AMON.lados(d, cfg), quien = x => (x.l === 'novio' ? 'el novio' : 'la novia');
         const aqui = lados.filter(x => x.aqui && (x.desde || x.hasta)), fuera = lados.filter(x => !x.aqui && (x.parroquia || x.desde));
         const igual = aqui.length === 2 && aqui[0].desde === aqui[1].desde && aqui[0].hasta === aqui[1].hasta;
-        this.dato(o, igual || aqui.length === 1 && !fuera.length ? AMON.rango(aqui[0]) : aqui.map(x => `${quien(x)} ${AMON.rango(x)}`).join('; '), [68, 144, 548]);
-        this.dato(o, fuera.map(x => `${x.parroquia || '___'} (${quien(x)}${AMON.rango(x) ? ', ' + AMON.rango(x) : ''})`).join('; ') || (d.proclamas_parroquias || ''), [68, 162, 548]);
+        const kAmon = 'amon_novio_lugar amon_novio_parroquia amon_novio_desde amon_novio_hasta amon_novia_lugar amon_novia_parroquia amon_novia_desde amon_novia_hasta';
+        this.dato(o, igual || aqui.length === 1 && !fuera.length ? AMON.rango(aqui[0]) : aqui.map(x => `${quien(x)} ${AMON.rango(x)}`).join('; '), [68, 144, 548], { k: kAmon });
+        this.dato(o, fuera.map(x => `${x.parroquia || '___'} (${quien(x)}${AMON.rango(x) ? ', ' + AMON.rango(x) : ''})`).join('; ') || (d.proclamas_parroquias || ''), [68, 162, 548], { k: kAmon });
       } else if (d.dispensa_motivo) {
         // empieza tras «por» y sigue en la línea de puntos de abajo
         const primera = this.cortar(d.dispensa_motivo, 10, 548 - 408);
-        this.dato(o, primera[0], [408, 276, 548]);
-        this.dato(o, primera.slice(1).join(' '), [68, 290, 548]);
+        this.dato(o, primera[0], [408, 276, 548], { k: 'dispensa_motivo' });
+        this.dato(o, primera.slice(1).join(' '), [68, 290, 548], { k: 'dispensa_motivo' });
       }
       firma(o, [302.5, 203.7], 8);
       firma(o, [469.5, 316.7], 8);
       if (d.otra_parroquia) {
-        this.dato(o, d.otra_parroquia, [364, 460, 548, 2, 11]);
-        this.dato(o, d.motivo_otra_parroquia, [257, 488, 548]);
+        this.dato(o, d.otra_parroquia, [364, 460, 548, 2, 11], { k: 'otra_parroquia' });
+        this.dato(o, d.motivo_otra_parroquia, [257, 488, 548], { k: 'motivo_otra_parroquia' });
         firma(o, [469.5, 515.7], 8);
+      }
+      // 3) Aprobación para la celebración: lo rellena la Vicaría (web «Expedientes Vicaría»)
+      if (ctx.vicaria || d.vic_celebrar_en || d.vic_acordado_en || d.vic_fecha) {
+        const sz = ctx.vicaria ? { k: 'vic_celebrar_en' } : {};
+        const primera = this.cortar(String(d.vic_celebrar_en || '').replace(/\s+/g, ' ').trim(), 10, 548 - 452);
+        this.dato(o, primera[0], [452, 601, 548], sz);
+        this.dato(o, primera.slice(1).join(' '), [72, 617, 548], sz);
+        this.dato(o, d.vic_acordado_en, [255, 631, 548], ctx.vicaria ? { k: 'vic_acordado_en' } : {});
+        const f = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d.vic_fecha || '');
+        const kf = ctx.vicaria ? { k: 'vic_fecha' } : {};
+        this.dato(o, f ? String(+f[3]) : '', [80, 648, 152], kf);
+        this.dato(o, f ? MESES[+f[2] - 1] : '', [170, 648, 240], kf);
+        this.dato(o, f ? f[1] : '', [257, 648, 328], kf);
       }
     }
 

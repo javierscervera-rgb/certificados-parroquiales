@@ -340,10 +340,11 @@ function render() {
   if (estado.vista === 'menu') app.innerHTML = vistaMenu();
   else if (estado.vista === 'parroquia') app.innerHTML = vistaParroquia();
   else if (estado.vista === 'firmantes') app.innerHTML = vistaFirmantes();
+  else if (estado.vista === 'revision') app.innerHTML = Vicaria.vista();
   else app.innerHTML = vistaFormulario();
   if (estado.vista === 'form') actualizarPrevia();
   if (estado.vista === 'menu') { ajustarTareas(); if (typeof Callejero !== 'undefined') Callejero.montar(); }
-  if (estado.vista !== 'menu') setTimeout(irAlPrimerVacio, 0);
+  if (estado.vista !== 'menu' && estado.vista !== 'revision') setTimeout(irAlPrimerVacio, 0);
 }
 function irA(vista) { estado.vista = vista; render(); window.scrollTo(0, 0); }
 
@@ -355,7 +356,8 @@ function vistaMenu() {
     cfg.firmas.map((f, i) => `<option value="${i}" ${i === estado.firma ? 'selected' : ''}>${esc(f.nombre)} — ${esc(f.cargo)}</option>`).join('');
   const grupos = GRUPOS.map(g => {
     const botones = CERTIFICADOS.filter(c => c.grupo === g.id).map(c =>
-      `<button class="cert ${c.estado === 'pendiente' ? 'pend' : ''}" data-abrir="${c.id}" ${bloq}>${c.estado === 'pendiente' ? '<span class="pill">pendiente</span>' : ''}${esc(c.nombre)}</button>`).join('');
+      `<button class="cert ${c.estado === 'pendiente' ? 'pend' : ''}" data-abrir="${c.id}" ${bloq}>${c.estado === 'pendiente' ? '<span class="pill">pendiente</span>' : ''}${esc(c.nombre)}</button>`
+      + (c.id === 'expediente' ? Vicaria.botonMenu() : '')).join('');
     return `<div class="grupo" id="grupo-${g.id}"><div><div class="icono">${ICONOS[g.id]}</div><div class="etq">${g.nombre}</div></div><div class="botones">${botones}</div></div>`;
   }).join('');
   const r = actual(), { i, n } = posicion();
@@ -984,6 +986,7 @@ function vistaExpediente(cert) {
           <button class="acc" data-pdf="1">${IC.guardar}<span>Guardar PDF</span></button>
           <button class="acc" data-correo>${IC.mail}<span>Enviar por mail</span></button>
         </div>
+        ${Vicaria.grupoExpediente()}
         <div class="grupo-acc otros-docs"><span>${IC.pdf}Otros documentos</span>${otros}</div>
       </div>
     </div>
@@ -1363,6 +1366,7 @@ document.addEventListener('click', async e => {
   if (sumario && !e.target.closest('.resuelto') && sumario.parentElement.dataset.estado !== 'resuelto') { e.preventDefault(); return; }
   if (e.target.closest('summary .resuelto')) { e.stopPropagation(); if (e.target.tagName !== 'INPUT') { e.preventDefault(); e.target.closest('.resuelto').querySelector('input').click(); } return; }
   const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.vic !== undefined) { Vicaria.clic(t); return; }
   if (t.dataset.amonEditar) { editarAmonestacion(t.dataset.amonEditar); return; }
   if (t.dataset.curPasar) {
     const c = cursillo(), nuevas = leerParejas(c.pegado);
@@ -1577,6 +1581,8 @@ window.addEventListener('focus', () => Google.refrescar());
   }
   // Si este navegador ya se conectó a Google Drive, se conecta solo
   Google.autoconectar().catch(e => console.error(e));
+  // Expedientes enviados a la Vicaría: ¿ha devuelto alguno?
+  Vicaria.iniciar();
   // El script de Google carga aparte: cuando llega, se repinta el indicador
   const espera = setInterval(() => { if (Google.estado().disponible) { clearInterval(espera); pintarChip(); } }, 300);
   setTimeout(() => clearInterval(espera), 15000);
