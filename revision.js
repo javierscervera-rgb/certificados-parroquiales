@@ -90,15 +90,38 @@ const Vicaria = (() => {
       catch (err) { console.error(err); b.disabled = false; b.textContent = 'Reintentar'; aviso('No se pudo enviar: ' + err.message, 6000); }
     });
   }
+  // Firma o sello demasiado grandes para el buzón: se reducen (como mucho «max» px; JPEG si no tiene transparencia)
+  function reducirImagen(src, max, limite) {
+    return new Promise(res => {
+      if (!src || src.length <= limite) return res(src || '');
+      const im = new Image();
+      im.onload = () => {
+        const k = Math.min(1, max / Math.max(im.width, im.height)), cv = document.createElement('canvas');
+        cv.width = Math.max(1, Math.round(im.width * k)); cv.height = Math.max(1, Math.round(im.height * k));
+        const g = cv.getContext('2d'); g.drawImage(im, 0, 0, cv.width, cv.height);
+        let out = cv.toDataURL('image/png');
+        if (out.length > limite) {
+          const px = g.getImageData(0, 0, cv.width, cv.height).data;
+          let transparente = false; for (let i = 3; i < px.length; i += 16) if (px[i] < 250) { transparente = true; break; }
+          if (!transparente) out = cv.toDataURL('image/jpeg', 0.85);
+        }
+        res(out.length < src.length ? out : src);
+      };
+      im.onerror = () => res(src);   // si no se puede leer, va tal cual (el buzón descarta lo que no sea una imagen válida)
+      im.src = src;
+    });
+  }
   async function enviar(r, para) {
     const cfg = estado.config, e = enlace(r), f = firmante(), g = Google.estado();
     const clave = e ? e.clave : VicariaServicio.nuevaClave();
+    const datos = datosEnvio(r);
+    for (const k of Object.keys(datos)) if (/^data:image\//.test(datos[k])) datos[k] = await reducirImagen(datos[k], 600, 150000);
     const res = await VicariaServicio.enviar({
       clave, id: e ? e.id : undefined,
       envio: {
-        para, datos: datosEnvio(r), fechaDocumento: estado.fechaDocumento,
-        firmante: { nombre: f.nombre || '', cargo: f.cargo || '', firma: f.firma || '' },   // con su firma escaneada
-        sello: cfg.sello || '',
+        para, datos, fechaDocumento: estado.fechaDocumento,
+        firmante: { nombre: f.nombre || '', cargo: f.cargo || '', firma: await reducirImagen(f.firma, 700, 350000) },   // con su firma escaneada
+        sello: await reducirImagen(cfg.sello, 700, 500000),
         parroquia: { nombre: cfg.nombre, nombreCorto: cfg.nombreCorto, direccion: cfg.direccion, localidad: cfg.localidad, cp: cfg.cp, provincia: cfg.provincia, diocesis: cfg.diocesis, web: cfg.web, vicaria: cfg.vicaria, email: (g.usuario && g.usuario.email) || '' },
       },
     });
