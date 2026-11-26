@@ -619,7 +619,7 @@ function campoHTML(c) {
 
 // En el móvil, «Menú principal» y «Nuevo registro» van arriba, bajo la cabecera
 function accionesArriba(nuevo = true) {
-  return `<div class="acciones-arriba"><button class="acc" data-ir="menu">${IC.menu}Menú principal</button>${nuevo ? `<button class="acc" data-registro="nuevo">${IC.nuevo}Nuevo registro</button>` : ''}</div>`;
+  return `<div class="acciones-arriba"><button class="acc" data-ir="menu">${IC.menu}Menú principal</button>${nuevo ? `<div class="nav-registro"><button class="acc" data-registro="anterior" title="Registro anterior">${IC.ant}Anterior</button><button class="acc" data-registro="siguiente" title="Registro siguiente">Siguiente${IC.sig}</button></div><button class="acc" data-registro="nuevo">${IC.nuevo}Nuevo registro</button>` : ''}</div>`;
 }
 function vistaFormulario() {
   const cert = CERTIFICADOS.find(c => c.id === estado.certId);
@@ -662,6 +662,7 @@ function vistaFormulario() {
       <div class="lateral">
         <button class="acc" data-ir="menu">${IC.menu}Menú principal</button>
         ${estado.volverA === 'expediente' && cert.id !== 'expediente' ? `<button class="acc" data-abrir="expediente">${IC.ant}Volver al expediente</button>` : ''}
+        <div class="nav-registro"><button class="acc" data-registro="anterior" title="Registro anterior">${IC.ant}Anterior</button><button class="acc" data-registro="siguiente" title="Registro siguiente">Siguiente${IC.sig}</button></div>
         <button class="acc" data-registro="nuevo">${IC.nuevo}Nuevo registro</button>
         <button class="miniatura" id="previa" title="Pulsa para ampliar" ${listo ? '' : 'disabled'}></button>
         <div class="grupo-acc"><span>${IC.imprimir}Imprimir</span>
@@ -932,6 +933,11 @@ function editarAmonestacion(id) {
 }
 
 /* ---------------- EXPEDIENTE MATRIMONIAL ---------------- */
+// Pestañas que no son parte del impreso, aunque van con él
+const PESTANAS_EXTRA = [
+  { id: 'firmas', nombre: 'Firmas', titulo: 'Firmas a distancia de los novios y los testigos (no es parte del impreso)', icono: '<svg viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M14 4l4 4-9 9H5v-4z"/></svg>' },
+  { id: 'otros', nombre: 'Otros documentos', titulo: 'Documentos que se hacen con los datos del expediente', icono: '<svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>' },
+];
 const PESTANAS_EXP = [
   { id: 'datos', nombre: 'Datos generales', parte: 'portada' },
   { id: 'novio', nombre: 'Novio', parte: 'novio' },
@@ -994,6 +1000,10 @@ function vistaExpediente(cert) {
   if (!d.diligencia) d.diligencia = 'Amonestaciones aquí';
   ['novio', 'novia'].forEach(l => { if (!d[l + '_apellido1'] && !d[l + '_apellido2'] && d[l + '_apellidos']) d[l + '_apellido1'] = d[l + '_apellidos']; });
   const opcFirmas = cfg.firmas.map((f, i) => `<option value="${i}" ${i === estado.firma ? 'selected' : ''}>${esc(f.nombre)} — ${esc(f.cargo)}</option>`).join('');
+  const otrosDocs = [
+    ['alegato', 'Alegato V'], ['exhorto:Novio', 'Exhorto amonest. novio'], ['exhorto:Novia', 'Exhorto amonest. novia'],
+    ['fe_vida_novio', 'Fe de vida y estado novio'], ['fe_vida_novia', 'Fe de vida y estado novia'], ['atestado', 'Atestado de libertad'], ['registro_civil', 'Certificado registro civil'],
+  ].map(([id, n]) => `<button class="acc" data-otro-doc="${id}">${IC.pdf}<span>${n}</span></button>`).join('') + `<button class="acc" data-otro-doc="amonestaciones">${IC.pdf}<span>Amonestaciones activas (edicto)</span></button>`;
   let cuerpo = '';
   if (pest === 'datos') {
     const columna = (lado, titulo) => `<div class="columna-pareja"><h4>${titulo}</h4><div class="rejilla">${
@@ -1010,6 +1020,11 @@ function vistaExpediente(cert) {
       <p>Cada testigo debe ser interrogado <strong>por separado y en ausencia de los contrayentes</strong>.</p></div>
       ${juramentoHTML(pest + '_juramento', '¿Acepta Vd. responder a las siguientes preguntas bajo juramento?')}
       <div style="grid-column:1/-1">${seccionesHTML(EXPEDIENTE.testigo, pest + '_')}</div>`;
+  } else if (pest === 'firmas') {
+    cuerpo = `<div style="grid-column:1/-1">${Firmas.pestanaHTML()}</div>`;
+  } else if (pest === 'otros') {
+    cuerpo = `<div class="intro-exp" style="grid-column:1/-1"><h4>Otros documentos</h4><p>Se hacen con los datos de este expediente. Al terminar, «Volver al expediente» te trae aquí.</p></div>
+      <div class="otros-docs-rejilla" style="grid-column:1/-1">${otrosDocs}</div>`;
   } else {
     // campos antiguos → nuevos
     if (d.diligencia === 'Dispensa de amonestaciones' && d.dispensa === undefined) d.dispensa = '1';
@@ -1035,17 +1050,15 @@ function vistaExpediente(cert) {
       ${campoHTML({ k: 'motivo_otra_parroquia', label: 'Motivo', w: 12 })}`;
   }
   const partes = EXPEDIENTE.partes.map(p => `<option value="${p.id}" ${p.id === estado.parteExp ? 'selected' : ''}>${p.nombre}</option>`).join('');
-  const otros = [
-    ['alegato', 'Alegato V'], ['exhorto:Novio', 'Exhorto amonest. novio'], ['exhorto:Novia', 'Exhorto amonest. novia'],
-    ['fe_vida_novio', 'Fe de vida y estado novio'], ['fe_vida_novia', 'Fe de vida y estado novia'], ['atestado', 'Atestado de libertad'], ['registro_civil', 'Certificado registro civil'],
-  ].map(([id, n]) => `<button class="btn" data-otro-doc="${id}">${n}</button>`).join('') + `<button class="btn" data-otro-doc="amonestaciones">Amonestaciones activas (edicto)</button>`;
   return `
   ${cabecera(esc(cert.titulo))}
   <main>
     ${accionesArriba(true)}
     <div class="form-layout">
       <div class="tarjeta">
-        <div class="pestanas" role="tablist">${PESTANAS_EXP.map(p => `<button role="tab" class="${p.id === pest ? 'on' : ''}" data-pestana="${p.id}">${p.nombre}</button>`).join('')}</div>
+        <div class="pestanas" role="tablist">${PESTANAS_EXP.map(p => `<button role="tab" class="${p.id === pest ? 'on' : ''}" data-pestana="${p.id}">${p.nombre}</button>`).join('')}
+          <span class="pestanas-sep" aria-hidden="true"></span>
+          ${PESTANAS_EXTRA.map(p => `<button role="tab" class="extra ${p.id === pest ? 'on' : ''}" data-pestana="${p.id}" title="${p.titulo}">${p.icono}${p.nombre}</button>`).join('')}</div>
         <div class="rejilla">
           <div class="campo" style="grid-column:span 6"><label for="selFirma">Firma</label><select id="selFirma">${opcFirmas}</select></div>
           <div class="campo" style="grid-column:span 3"><label for="fechaDoc">Fecha del documento</label><input type="date" id="fechaDoc" value="${estado.fechaDocumento}"></div>
@@ -1055,6 +1068,7 @@ function vistaExpediente(cert) {
       </div>
       <div class="lateral">
         <button class="acc" data-ir="menu">${IC.menu}Menú principal</button>
+        <div class="nav-registro"><button class="acc" data-registro="anterior" title="Registro anterior">${IC.ant}Anterior</button><button class="acc" data-registro="siguiente" title="Registro siguiente">Siguiente${IC.sig}</button></div>
         <button class="acc" data-registro="nuevo">${IC.nuevo}Nuevo registro</button>
         <button class="miniatura" id="previa" title="Pulsa para ampliar"></button>
         <div class="grupo-acc"><span>${IC.imprimir}Expediente</span>
@@ -1063,9 +1077,7 @@ function vistaExpediente(cert) {
           <button class="acc" data-pdf="1">${IC.guardar}<span>Guardar PDF</span></button>
           <button class="acc" data-correo>${IC.mail}<span>Enviar por mail</span></button>
         </div>
-        ${Firmas.grupoExpediente()}
         ${Vicaria.grupoExpediente()}
-        <div class="grupo-acc otros-docs"><span>${IC.pdf}Otros documentos</span>${otros}</div>
       </div>
     </div>
   </main>`;
@@ -1538,7 +1550,7 @@ document.addEventListener('click', async e => {
   else if (t.dataset.abrir) { if (t.dataset.abrir !== 'expediente' && estado.certId !== 'expediente') estado.volverA = null; estado.certId = t.dataset.abrir; irA('form'); }
   else if (t.dataset.pestana) {
     estado.pestanaExp = t.dataset.pestana;
-    estado.parteExp = (PESTANAS_EXP.find(p => p.id === t.dataset.pestana) || {}).parte || 'todo';
+    const pe = PESTANAS_EXP.find(p => p.id === t.dataset.pestana); if (pe) estado.parteExp = pe.parte || 'todo';
     render(); window.scrollTo(0, 0);
   }
   else if (t.dataset.otroDoc) {

@@ -32,38 +32,60 @@ const Firmas = (() => {
     return valido(d[p.email]) ? 'listo' : 'sin-email';
   }
 
-  /* ---------- Lateral del expediente ---------- */
-  function grupoExpediente() {
+  /* ---------- Pestaña «Firmas» del expediente ---------- */
+  // Estado, botones y recuadro de la firma de una persona (se repinta solo, sin tocar el campo del email)
+  function estadoHTML(d, p) {
+    const e = estadoDe(d, p);
+    const fecha = k => esc(H.fechaCorta(String(d['fd_' + p.id + k] || '').slice(0, 10)));
+    let info = '', botones = '';
+    if (e === 'firmado') {
+      info = `Firmado el ${fecha('_fecha')}`;
+      botones = `<button class="btn" data-fd-quitar="${p.id}">Quitar firma</button>`;
+    } else if (e === 'pendiente') {
+      info = `Enlace enviado el ${fecha('_enviada')} a ${esc(d['fd_' + p.id + '_email'] || d[p.email] || '')}. Esperando la firma…`;
+      botones = `<button class="btn" data-fd-enviar="${p.id}" ${enviando.has(p.id) || !valido(d[p.email]) ? 'disabled' : ''}>Reenviar enlace</button>`;
+    } else if (e === 'sin-email') {
+      info = 'Escribe su email para poder enviarle el enlace.';
+    } else {
+      info = e === 'caducado' ? 'El enlace caducó sin firmar: envía otro.' : 'Listo para enviar el enlace.';
+      botones = `<button class="btn prim" data-fd-enviar="${p.id}" ${enviando.has(p.id) ? 'disabled' : ''}>${enviando.has(p.id) ? 'Enviando…' : 'Enviar enlace para firmar'}</button>`;
+    }
+    return `<div class="fd-recuadro">${d['fd_' + p.id] ? `<img src="${d['fd_' + p.id]}" alt="Firma de ${esc(p.etiqueta)}">` : '<span>Sin firma</span>'}</div>
+      <p class="fd-info">${info}</p><div class="fila">${botones}</div>`;
+  }
+  function pestanaHTML() {
     const d = estado.registro;
-    const filas = PERSONAS.map(p => {
-      const e = estadoDe(d, p), nombre = p.nombre(d);
-      let info = '', boton = '';
-      if (e === 'firmado') {
-        info = `<img class="fd-firma" src="${d['fd_' + p.id]}" alt="Firma"><small>Firmado el ${esc(H.fechaCorta(String(d['fd_' + p.id + '_fecha'] || '').slice(0, 10)))}</small>`;
-        boton = `<button class="btn" data-fd-quitar="${p.id}" title="Quitar la firma">Quitar</button>`;
-      } else if (e === 'pendiente') {
-        info = `<small>Enlace enviado el ${esc(H.fechaCorta(String(d['fd_' + p.id + '_enviada'] || '').slice(0, 10)))} a ${esc(d['fd_' + p.id + '_email'] || d[p.email] || '')} · esperando firma</small>`;
-        boton = `<button class="btn" data-fd-enviar="${p.id}" ${enviando.has(p.id) ? 'disabled' : ''}>Reenviar</button>`;
-      } else if (e === 'sin-email') {
-        info = `<small>Falta su email (${p.pestana === 'datos' ? 'Datos generales' : p.etiqueta})</small>`;
-        boton = `<button class="btn" data-pestana="${p.pestana}">Poner email</button>`;
-      } else {
-        info = `<small>${e === 'caducado' ? 'El enlace caducó sin firmar. ' : ''}${esc(d[p.email])}</small>`;
-        boton = `<button class="btn prim" data-fd-enviar="${p.id}" ${enviando.has(p.id) ? 'disabled' : ''}>${enviando.has(p.id) ? 'Enviando…' : 'Enviar enlace'}</button>`;
-      }
-      return `<li class="fd-${e}"><div class="fd-quien"><strong>${p.etiqueta}</strong>${nombre ? `<span>${esc(nombre)}</span>` : ''}${info}</div>${boton}</li>`;
-    }).join('');
-    const pendientes = PERSONAS.filter(p => estadoDe(d, p) === 'listo' || estadoDe(d, p) === 'caducado').length;
-    return `<div class="grupo-acc firmas-distancia" id="firmasDistancia"><span>${IC.pluma}Firmas a distancia</span>
-      <p class="nota">Cuando hayan leído sus respuestas, envía a cada uno un enlace para firmar desde el móvil. La firma aparece sola en su página del expediente.</p>
-      <ul class="fd-lista">${filas}</ul>
-      ${pendientes > 1 ? `<button class="acc" data-fd-todos>${IC.mail}<span>Enviar a todos (${pendientes})</span></button>` : ''}
+    const tarjeta = p => `<div class="fd-tarjeta fd-${estadoDe(d, p)}" data-fd-tarjeta="${p.id}">
+        <h4>${p.etiqueta}${p.nombre(d) ? `<span>${esc(p.nombre(d))}</span>` : ''}</h4>
+        <div class="campo"><label for="c_${p.email}">Email</label><input id="c_${p.email}" data-k="${p.email}" type="email" value="${esc(d[p.email] || '')}" placeholder="correo@ejemplo.com" autocomplete="off"></div>
+        <div class="fd-estado" data-fd-estado="${p.id}">${estadoHTML(d, p)}</div>
+      </div>`;
+    const pendientes = PERSONAS.filter(p => ['listo', 'caducado'].includes(estadoDe(d, p))).length;
+    // orden del tabulador: primero la columna izquierda (novio, testigo 1) y luego la derecha (novia, testigo 2)
+    return `<div class="fd-pestana" id="firmasDistancia">
+      <div class="intro-exp"><h4>Firmas a distancia</h4>
+        <p>Cuando hayan leído sus respuestas, envía a cada uno un enlace a su email para firmar desde el móvil. La firma llega sola y sale en su página del expediente, bajo «Firma del contrayente / del testigo y fecha».</p></div>
+      <div class="fd-columnas">
+        <div class="fd-columna">${tarjeta(PERSONAS[0])}${tarjeta(PERSONAS[2])}</div>
+        <div class="fd-columna">${tarjeta(PERSONAS[1])}${tarjeta(PERSONAS[3])}</div>
+      </div>
+      <div class="fila fd-todos">${pendientes > 1 ? `<button class="btn prim" data-fd-todos>${IC.mail}Enviar el enlace a todos (${pendientes})</button>` : ''}</div>
     </div>`;
   }
   function repintar() {
-    const g = document.getElementById('firmasDistancia');
-    if (g && estado.vista === 'form' && estado.certId === 'expediente') { g.outerHTML = grupoExpediente(); actualizarPrevia(); }
+    if (estado.vista !== 'form' || estado.certId !== 'expediente' || estado.pestanaExp !== 'firmas') return;
+    const d = estado.registro;
+    PERSONAS.forEach(p => {
+      const caja = document.querySelector(`[data-fd-estado="${p.id}"]`); if (!caja) return;
+      caja.innerHTML = estadoHTML(d, p);
+      caja.closest('.fd-tarjeta').className = `fd-tarjeta fd-${estadoDe(d, p)}`;
+    });
+    const todos = document.querySelector('.fd-todos');
+    if (todos) { const n = PERSONAS.filter(p => ['listo', 'caducado'].includes(estadoDe(d, p))).length; todos.innerHTML = n > 1 ? `<button class="btn prim" data-fd-todos>${IC.mail}Enviar el enlace a todos (${n})</button>` : ''; }
+    actualizarPrevia();
   }
+  // al escribir un email cambia lo que se puede hacer (después de que la app lo guarde)
+  document.addEventListener('input', e => { if (/^(novio|novia|t1|t2)_email$/.test((e.target.dataset || {}).k || '')) setTimeout(repintar, 0); });
 
   /* ---------- Enviar el enlace ---------- */
   async function enviar(ids) {
@@ -71,7 +93,7 @@ const Firmas = (() => {
     if (!g.disponible || !g.usuario) { aviso('Conéctate con Google para enviar los enlaces desde tu Gmail.'); return; }
     const d = estado.registro, r = actual(), cfg = estado.config, f = firmante();
     const personas = PERSONAS.filter(p => ids.includes(p.id) && valido(d[p.email]));
-    if (!personas.length) return;
+    if (!personas.length) { aviso('Falta un email válido.'); return; }
     const permiso = Google.prepararGmail(); // dentro del clic, por si Google abre su ventana
     personas.forEach(p => enviando.add(p.id)); repintar();
     let bien = 0;
@@ -164,5 +186,5 @@ const Firmas = (() => {
     }
   }
 
-  return { grupoExpediente, clic, revisar, iniciar, programar, PERSONAS };
+  return { pestanaHTML, clic, revisar, iniciar, programar, PERSONAS };
 })();

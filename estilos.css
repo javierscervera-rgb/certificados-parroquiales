@@ -636,3 +636,41 @@ ins { text-decoration: none; color: var(--tinta); font-weight: 600; }
 .fd-lista li.fd-firmado { border-color: #5a9a6a; }
 .fd-lista li.fd-pendiente { border-color: #d29a3a; }
 .fd-lista li.fd-sin-email .fd-quien small { color: #c0392b; }
+
+/* Fechas escritas dd/mm/aaaa */
+input.fecha-texto { font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+input.fecha-mal { border-color: #c0392b !important; box-shadow: 0 0 0 2px rgba(192,57,43,.18); }
+
+/* Pestañas que no son parte del impreso (Firmas, Otros documentos) */
+.pestanas .pestanas-sep { flex: 1 1 12px; min-width: 12px; }
+.pestanas button.extra { background: transparent; border: 1.5px dashed var(--borde); border-bottom: 0; color: var(--suave); display: inline-flex; align-items: center; gap: 6px; font-style: italic; }
+.pestanas button.extra svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pestanas button.extra:hover:not(.on) { background: var(--hover); color: var(--tinta); }
+.pestanas button.extra.on { background: var(--oro); border-color: var(--oro); color: var(--sobre-acento); font-style: normal; }
+@media (max-width: 760px) { .pestanas .pestanas-sep { flex-basis: 100%; height: 6px; } }
+
+/* Pestaña Firmas */
+.fd-columnas { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.fd-columna { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.fd-tarjeta { border: 1px solid var(--borde); border-radius: 12px; padding: 12px 14px; background: var(--campo); display: flex; flex-direction: column; gap: 8px; }
+.fd-tarjeta h4 { margin: 0; display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+.fd-tarjeta h4 span { font-weight: 500; font-size: 13px; color: var(--suave); }
+.fd-recuadro { height: 92px; border: 1.5px dashed var(--borde); border-radius: 10px; background: #fff; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.fd-recuadro img { max-width: 92%; max-height: 84px; }
+.fd-recuadro span { color: #b9ad9d; font-size: 13px; }
+.fd-info { margin: 0; font-size: 12px; color: var(--suave); }
+.fd-tarjeta.fd-firmado { border-color: #5a9a6a; }
+.fd-tarjeta.fd-firmado .fd-recuadro { border-style: solid; border-color: #5a9a6a; }
+.fd-tarjeta.fd-pendiente { border-color: #d29a3a; }
+.fd-tarjeta.fd-sin-email .fd-info { color: #c0392b; }
+.fd-todos { margin-top: 12px; }
+@media (max-width: 640px) { .fd-columnas { grid-template-columns: 1fr; } }
+
+/* Pestaña Otros documentos */
+.otros-docs-rejilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+
+/* Anterior / Siguiente registro, en la misma línea */
+.nav-registro { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.nav-registro .acc { justify-content: center; min-width: 0; padding-left: 6px; padding-right: 6px; gap: 4px; }
+.nav-registro .acc svg { flex: none; }
+.acciones-arriba .nav-registro, .acciones-arriba > .acc { grid-column: 1 / -1; }

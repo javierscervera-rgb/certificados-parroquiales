@@ -134,7 +134,7 @@ const AMON = {
 const CAMPOS_PAREJA = [
   { k: 'nombre', label: 'Nombre', w: 12 },
   { k: 'apellido1', label: '1º Apellido', w: 6 }, { k: 'apellido2', label: '2º Apellido', w: 6 },
-  { k: 'telefono', label: 'Teléfono', w: 6, tipo: 'tel' }, { k: 'email', label: 'Email (para firmar a distancia)', w: 6, tipo: 'email' },
+  { k: 'telefono', label: 'Teléfono', w: 6, tipo: 'tel' },
   { k: 'lugar_nac', label: 'Lugar de nacimiento', w: 8, sep: true, nueva: true }, { k: 'f_nac', label: 'Fecha nacimiento', tipo: 'date', w: 4 },
   { k: 'padre_nombre', label: 'Nombre padre', w: 5 }, { k: 'padre_apellidos', label: 'Apellidos padre', w: 7 },
   { k: 'madre_nombre', label: 'Nombre madre', w: 5 }, { k: 'madre_apellidos', label: 'Apellidos madre', w: 7 },
