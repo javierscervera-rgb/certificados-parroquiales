@@ -21,12 +21,12 @@
 </head>
 <body>
 <h1>Prueba del tabulador</h1>
-<p>Toca el campo <b>A1</b> y pulsa <b>Tab</b> varias veces (y Mayúsculas+Tab). Después haz lo mismo empezando en <b>B1</b>. Al final pulsa «Enviar resultado».</p>
+<p>Toca el campo <b>A1</b> y pulsa <b>Tab</b> varias veces (y Mayúsculas+Tab). Después haz lo mismo empezando en <b>B1</b>, y prueba también con la tecla <b>Intro ↵</b> en B1 (y Mayúsculas+Intro). Al final pulsa «Enviar resultado».</p>
 
 <h2>A · Tab del propio navegador</h2>
 <div class="caja"><form class="fila" onsubmit="return false"><input id="A1" placeholder="A1"><input id="A2" placeholder="A2"><input id="A3" placeholder="A3"></form></div>
 
-<h2>B · Tab llevado por la página</h2>
+<h2>B · Tab (o Intro ↵) llevado por la página</h2>
 <div class="caja"><div class="fila"><input id="B1" placeholder="B1" data-b><input id="B2" placeholder="B2" data-b><input id="B3" placeholder="B3" data-b></div></div>
 
 <h2>Lo que llega</h2>
@@ -47,7 +47,7 @@
   document.addEventListener('focusin', e => apuntar(`  foco → ${id(e.target)}`));
   // B: la página mueve el foco al pulsar Tab
   document.addEventListener('keydown', e => {
-    if (!(e.key === 'Tab' || e.keyCode === 9)) return;
+    if (!(e.key === 'Tab' || e.keyCode === 9 || e.key === 'Enter')) return;
     const bs = [...document.querySelectorAll('[data-b]')], i = bs.indexOf(document.activeElement);
     if (i < 0) return;
     e.preventDefault();

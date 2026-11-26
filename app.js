@@ -1461,9 +1461,17 @@ document.addEventListener('keydown', e => {
     if (opcion) reenfocar(`[data-opcion="${opcion}"] button[data-v="${otro.dataset.v}"]`); else otro.focus();
     return;
   }
+  // iPad/iPhone con teclado físico: el sistema se queda con la tecla Tab (la página no la recibe y mueve el foco
+  // a su manera). Ahí la tecla Intro (↵) pasa al campo siguiente y Mayúsculas+Intro al anterior, en el orden de la página.
+  // En los cuadros de texto largos Intro sigue haciendo un salto de línea.
+  if (esIOS && e.key === 'Enter' && !e.ctrlKey && !e.altKey && !e.metaKey && e.target.tagName !== 'TEXTAREA' && !e.target.closest('button, .tareas, .callejero, .modal')) {
+    const lista = camposNavegables(), i = lista.indexOf(document.activeElement);
+    if (i < 0) return;
+    const j = i + (e.shiftKey ? -1 : 1);
+    if (j >= 0 && j < lista.length) { e.preventDefault(); enfocar(lista[j]); }
+    return;
+  }
   if (!(e.key === 'Tab' || e.code === 'Tab' || e.keyCode === 9) || e.ctrlKey || e.altKey || e.metaKey) return;
-  // iPad/iPhone: Safari y Chrome no dejan mover el foco por programa al pulsar Tab en el teclado físico,
-  // así que ahí se deja el Tab del propio navegador (el orden de la página ya es el mismo; ver ordenTab)
   if (esIOS) return;
   const lista = camposNavegables();
   const i = lista.indexOf(document.activeElement);
