@@ -619,7 +619,7 @@ function campoHTML(c) {
 
 // En el móvil, «Menú principal» y «Nuevo registro» van arriba, bajo la cabecera
 function accionesArriba(nuevo = true) {
-  return `<div class="acciones-arriba"><button class="acc" data-ir="menu">${IC.menu}Menú principal</button>${nuevo ? `<div class="nav-registro"><button class="acc" data-registro="anterior" title="Registro anterior">${IC.ant}Anterior</button><button class="acc" data-registro="siguiente" title="Registro siguiente">Siguiente${IC.sig}</button></div><button class="acc" data-registro="nuevo">${IC.nuevo}Nuevo registro</button>` : ''}</div>`;
+  return `<div class="acciones-arriba"><button class="acc" data-ir="menu">${IC.menu}Menú principal</button>${nuevo ? `<div class="nav-registro"><button class="acc" data-registro="anterior" title="Registro anterior">${IC.ant}Anterior</button><button class="acc" data-registro="siguiente" title="Registro siguiente">Siguiente${IC.sig}</button></div><div class="nav-registro"><button class="acc" data-registro="nuevo" title="Nuevo registro">${IC.nuevo}Nuevo registro</button><button class="acc borrar" data-registro="eliminar" title="Eliminar este registro">${IC.papelera}Eliminar registro</button></div>` : ''}</div>`;
 }
 function vistaFormulario() {
   const cert = CERTIFICADOS.find(c => c.id === estado.certId);
@@ -663,7 +663,7 @@ function vistaFormulario() {
         <button class="acc" data-ir="menu">${IC.menu}Menú principal</button>
         ${estado.volverA === 'expediente' && cert.id !== 'expediente' ? `<button class="acc" data-abrir="expediente">${IC.ant}Volver al expediente</button>` : ''}
         <div class="nav-registro"><button class="acc" data-registro="anterior" title="Registro anterior">${IC.ant}Anterior</button><button class="acc" data-registro="siguiente" title="Registro siguiente">Siguiente${IC.sig}</button></div>
-        <button class="acc" data-registro="nuevo">${IC.nuevo}Nuevo registro</button>
+        <div class="nav-registro"><button class="acc" data-registro="nuevo" title="Nuevo registro">${IC.nuevo}Nuevo registro</button><button class="acc borrar" data-registro="eliminar" title="Eliminar este registro">${IC.papelera}Eliminar registro</button></div>
         <button class="miniatura" id="previa" title="Pulsa para ampliar" ${listo ? '' : 'disabled'}></button>
         <div class="grupo-acc"><span>${IC.imprimir}Imprimir</span>
           ${cert.soloSinFirma ? '' : `<button class="acc" data-imprimir="1" ${listo ? '' : 'disabled'}>${IC.pluma}<span>Con firma<small>Con sello y firma escaneada</small></span></button>`}
@@ -1076,7 +1076,7 @@ function vistaExpediente(cert) {
       <div class="lateral">
         <button class="acc" data-ir="menu">${IC.menu}Menú principal</button>
         <div class="nav-registro"><button class="acc" data-registro="anterior" title="Registro anterior">${IC.ant}Anterior</button><button class="acc" data-registro="siguiente" title="Registro siguiente">Siguiente${IC.sig}</button></div>
-        <button class="acc" data-registro="nuevo">${IC.nuevo}Nuevo registro</button>
+        <div class="nav-registro"><button class="acc" data-registro="nuevo" title="Nuevo registro">${IC.nuevo}Nuevo registro</button><button class="acc borrar" data-registro="eliminar" title="Eliminar este registro">${IC.papelera}Eliminar registro</button></div>
         <button class="miniatura" id="previa" title="Pulsa para ampliar"></button>
         <div class="grupo-acc"><span>${IC.imprimir}Expediente</span>
           <select id="parteExp" aria-label="Qué parte del expediente">${partes}</select>

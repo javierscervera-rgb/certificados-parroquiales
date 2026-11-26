@@ -679,3 +679,8 @@ input.fecha-mal { border-color: #c0392b !important; box-shadow: 0 0 0 2px rgba(1
 .exp-titulo { margin: 0 0 12px; font-family: var(--serif); font-weight: 600; font-size: 22px; line-height: 1.2; color: var(--titulo); }
 .exp-titulo span { color: var(--suave); font-weight: 400; margin: 0 4px; }
 .exp-titulo em { font-weight: 400; font-size: 16px; color: var(--suave); }
+
+/* Nuevo / Eliminar registro, en la misma línea */
+.nav-registro .acc.borrar { color: #c0392b; }
+.nav-registro .acc.borrar:hover { border-color: #c0392b; }
+html[data-tema="oscuro"] .nav-registro .acc.borrar, html:not([data-tema]) .nav-registro .acc.borrar { color: #ef8a7a; }
