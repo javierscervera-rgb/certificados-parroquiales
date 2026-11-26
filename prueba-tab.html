@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Prueba del tabulador</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; margin: 0; padding: 18px; background: #F4EEE4; color: #2A241D; }
+  h1 { font-family: Georgia, serif; color: #B5604A; font-size: 24px; margin: 0 0 6px; }
+  h2 { font-size: 15px; margin: 18px 0 6px; }
+  p { margin: 4px 0; line-height: 1.4; }
+  .caja { background: #fff; border: 1px solid #E0D6C8; border-radius: 12px; padding: 12px; }
+  .fila { display: flex; gap: 8px; flex-wrap: wrap; }
+  input { font-size: 17px; padding: 8px 10px; border: 1.5px solid #ccc; border-radius: 8px; width: 150px; }
+  input:focus { border-color: #B5604A; outline: 3px solid #f0c9bd; }
+  #log { font: 12px/1.4 ui-monospace, Menlo, monospace; white-space: pre-wrap; max-height: 260px; overflow: auto; background: #fff; border: 1px solid #E0D6C8; border-radius: 12px; padding: 10px; }
+  button { font-size: 16px; font-weight: 600; padding: 12px 16px; border-radius: 10px; border: 0; background: #B5604A; color: #fff; }
+  button.sec { background: #e9e1d5; color: #2A241D; }
+</style>
+</head>
+<body>
+<h1>Prueba del tabulador</h1>
+<p>Toca el campo <b>A1</b> y pulsa <b>Tab</b> varias veces (y Mayúsculas+Tab). Después haz lo mismo empezando en <b>B1</b>. Al final pulsa «Enviar resultado».</p>
+
+<h2>A · Tab del propio navegador</h2>
+<div class="caja"><form class="fila" onsubmit="return false"><input id="A1" placeholder="A1"><input id="A2" placeholder="A2"><input id="A3" placeholder="A3"></form></div>
+
+<h2>B · Tab llevado por la página</h2>
+<div class="caja"><div class="fila"><input id="B1" placeholder="B1" data-b><input id="B2" placeholder="B2" data-b><input id="B3" placeholder="B3" data-b></div></div>
+
+<h2>Lo que llega</h2>
+<div id="log"></div>
+<p class="fila" style="margin-top:10px"><button id="enviar">Enviar resultado</button><button class="sec" id="limpiar">Borrar</button></p>
+<p id="estado"></p>
+
+<script src="config.js"></script>
+<script>
+  const log = [];
+  const id = el => el && el !== document.body ? (el.id || el.tagName) : 'BODY';
+  const apuntar = t => { log.push(t); const l = document.getElementById('log'); l.textContent = log.join('\n'); l.scrollTop = l.scrollHeight; };
+  apuntar(`UA: ${navigator.userAgent}`);
+  apuntar(`touchPoints: ${navigator.maxTouchPoints} · pantalla: ${screen.width}x${screen.height}`);
+  ['keydown', 'keyup'].forEach(tipo => document.addEventListener(tipo, e => {
+    apuntar(`${tipo} key="${e.key}" code="${e.code}" keyCode=${e.keyCode} shift=${e.shiftKey} en ${id(e.target)}`);
+  }, true));
+  document.addEventListener('focusin', e => apuntar(`  foco → ${id(e.target)}`));
+  // B: la página mueve el foco al pulsar Tab
+  document.addEventListener('keydown', e => {
+    if (!(e.key === 'Tab' || e.keyCode === 9)) return;
+    const bs = [...document.querySelectorAll('[data-b]')], i = bs.indexOf(document.activeElement);
+    if (i < 0) return;
+    e.preventDefault();
+    const j = (i + (e.shiftKey ? -1 : 1) + bs.length) % bs.length;
+    bs[j].focus();
+    setTimeout(() => apuntar(`  (página) pedido ${bs[j].id}, activo ahora ${id(document.activeElement)}`), 0);
+  });
+  document.getElementById('limpiar').onclick = () => { log.length = 2; apuntar('— borrado —'); };
+  document.getElementById('enviar').onclick = async () => {
+    const est = document.getElementById('estado'); est.textContent = 'Enviando…';
+    try {
+      const r = await fetch(window.MENSAJES_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ accion: 'enviar', nombre: 'Prueba del tabulador', parroquia: 'iPad', email: '', mensaje: log.join('\n').slice(0, 4900), web: location.href }) }).then(x => x.json());
+      est.textContent = r.ok ? '✓ Enviado. Gracias.' : 'No se pudo enviar.';
+    } catch (e) { est.textContent = 'No se pudo enviar: ' + e.message; }
+  };
+</script>
+</body>
+</html>
