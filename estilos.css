@@ -674,3 +674,8 @@ input.fecha-mal { border-color: #c0392b !important; box-shadow: 0 0 0 2px rgba(1
 .nav-registro .acc { justify-content: center; min-width: 0; padding-left: 6px; padding-right: 6px; gap: 4px; }
 .nav-registro .acc svg { flex: none; }
 .acciones-arriba .nav-registro, .acciones-arriba > .acc { grid-column: 1 / -1; }
+
+/* Título del expediente (apellidos del novio – apellidos de la novia), en todas las pestañas */
+.exp-titulo { margin: 0 0 12px; font-family: var(--serif); font-weight: 600; font-size: 22px; line-height: 1.2; color: var(--titulo); }
+.exp-titulo span { color: var(--suave); font-weight: 400; margin: 0 4px; }
+.exp-titulo em { font-weight: 400; font-size: 16px; color: var(--suave); }

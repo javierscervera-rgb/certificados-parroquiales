@@ -933,6 +933,12 @@ function editarAmonestacion(id) {
 }
 
 /* ---------------- EXPEDIENTE MATRIMONIAL ---------------- */
+// Título del expediente: «apellidos del novio – apellidos de la novia»
+function tituloExpediente(d) {
+  const ap = l => [d[l + '_apellido1'], d[l + '_apellido2']].filter(x => x && String(x).trim()).join(' ') || d[l + '_apellidos'] || '';
+  const a = ap('novio'), b = ap('novia');
+  return a || b ? `${esc(a || '…')} <span>–</span> ${esc(b || '…')}` : '<em>Expediente sin apellidos todavía</em>';
+}
 // Pestañas que no son parte del impreso, aunque van con él
 const PESTANAS_EXTRA = [
   { id: 'firmas', nombre: 'Firmas', titulo: 'Firmas a distancia de los novios y los testigos (no es parte del impreso)', icono: '<svg viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M14 4l4 4-9 9H5v-4z"/></svg>' },
@@ -1059,6 +1065,7 @@ function vistaExpediente(cert) {
         <div class="pestanas" role="tablist">${PESTANAS_EXP.map(p => `<button role="tab" class="${p.id === pest ? 'on' : ''}" data-pestana="${p.id}">${p.nombre}</button>`).join('')}
           <span class="pestanas-sep" aria-hidden="true"></span>
           ${PESTANAS_EXTRA.map(p => `<button role="tab" class="extra ${p.id === pest ? 'on' : ''}" data-pestana="${p.id}" title="${p.titulo}">${p.icono}${p.nombre}</button>`).join('')}</div>
+        <h2 class="exp-titulo" id="expTitulo">${tituloExpediente(d)}</h2>
         <div class="rejilla">
           <div class="campo" style="grid-column:span 6"><label for="selFirma">Firma</label><select id="selFirma">${opcFirmas}</select></div>
           <div class="campo" style="grid-column:span 3"><label for="fechaDoc">Fecha del documento</label><input type="date" id="fechaDoc" value="${estado.fechaDocumento}"></div>
@@ -1643,6 +1650,7 @@ document.addEventListener('input', e => {
     if (el.dataset.k === 'nombre') sexoAutomatico();
     const m = /^(novio|novia)_apellido[12]$/.exec(el.dataset.k);
     if (m) estado.registro[m[1] + '_apellidos'] = [estado.registro[m[1] + '_apellido1'], estado.registro[m[1] + '_apellido2']].filter(x => x && x.trim()).join(' ');
+    if (m && $('#expTitulo')) $('#expTitulo').innerHTML = tituloExpediente(estado.registro);
     guardarRegistro(); actualizarPrevia();
   }
   else if (el.id === 'fechaDoc') { estado.fechaDocumento = el.value; actualizarPrevia(); }
